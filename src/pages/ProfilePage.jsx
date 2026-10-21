@@ -10,6 +10,7 @@ import Toggle from '@/components/ui/Toggle';
 import { clearListings } from '@/data/listingsStore';
 import { events } from '@/data/mockData';
 import { clearFavorites, useFavorites } from '@/hooks/useFavorites';
+import { useServerAccount } from '@/hooks/useServerAccount';
 import { clearTickets, useTickets } from '@/hooks/useTickets';
 import { formatEventDate, formatPrice, initials } from '@/lib/format';
 import { ticketSavings } from '@/lib/tickets';
@@ -70,6 +71,7 @@ export default function ProfilePage() {
   const favorites = useFavorites();
   const [notify, setNotify] = useState(() => writeAccessPreGranted() || readNotifyPref());
   const [safeDealOpen, setSafeDealOpen] = useState(false);
+  const account = useServerAccount();
 
   const savings = useMemo(() => tickets.reduce((sum, t) => sum + ticketSavings(t), 0), [tickets]);
   const favoriteEvents = events.filter((e) => favorites.has(e.id));
@@ -193,6 +195,26 @@ export default function ProfilePage() {
         </Section>
 
         <Section title="Tickety">
+          {account.status !== 'off' && (
+            <ListRow
+              icon={account.status === 'error' ? 'lock' : 'shield-check'}
+              iconClass={
+                account.status === 'ok'
+                  ? 'bg-success-soft text-success'
+                  : account.status === 'error'
+                    ? 'bg-danger-soft text-danger'
+                    : 'bg-fill text-label-secondary'
+              }
+              title="Аккаунт Tickety"
+              subtitle={
+                account.status === 'ok'
+                  ? `Вход через Telegram подтверждён • с ${new Date(account.user.createdAt).toLocaleDateString('ru-RU')}`
+                  : account.status === 'error'
+                    ? account.error.message
+                    : 'Подключаемся к серверу…'
+              }
+            />
+          )}
           <ListRow
             icon="shield-heart"
             iconClass="bg-success-soft text-success"
