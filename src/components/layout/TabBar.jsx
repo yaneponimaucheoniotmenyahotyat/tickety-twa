@@ -18,7 +18,7 @@ export default function TabBar() {
           <li key={t.to}>
             <NavLink
               to={t.to}
-              end
+              end={t.to === '/'} // «Мои билеты» подсвечены и на экране отдельного билета
               onClick={() => haptic('selection')}
               className={({ isActive }) =>
                 `flex h-full flex-col items-center justify-center gap-0.5 text-caption2 font-medium transition-colors ${

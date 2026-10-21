@@ -10,7 +10,7 @@ export default function PaymentSuccessSheet({ open, onClose, onTickets, total, e
       onClose={onClose}
       footer={
         <Button size="lg" block onClick={onTickets}>
-          Перейти в «Мои билеты»
+          Открыть билет
         </Button>
       }
     >
@@ -27,8 +27,8 @@ export default function PaymentSuccessSheet({ open, onClose, onTickets, total, e
         <div className="card mt-5 flex w-full items-start gap-3 p-4 text-left">
           <Icon name="qr" className="mt-0.5 h-6 w-6 shrink-0 text-brand" />
           <p className="text-footnote text-label-secondary">
-            Билет появится в «Мои билеты» после переоформления продавцом. Обычно это занимает до 15 минут — мы
-            пришлём уведомление в Telegram.
+            Билет уже в разделе «Мои билеты». QR-код для прохода появится, как только продавец
+            переоформит билет на вас — обычно до 15 минут.
           </p>
         </div>
       </div>

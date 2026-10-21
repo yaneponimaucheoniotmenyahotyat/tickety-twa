@@ -10,7 +10,9 @@ import ReservationTimer from '@/components/checkout/ReservationTimer';
 import Button from '@/components/ui/Button';
 import { PAYMENT_METHODS, RESERVATION_SECONDS, SERVICE_FEE_PERCENT, getEvent, getOffer } from '@/data/mockData';
 import { useCountdown } from '@/hooks/useCountdown';
+import { addTicket } from '@/hooks/useTickets';
 import { formatPrice } from '@/lib/format';
+import { createTicket } from '@/lib/tickets';
 import { haptic, setClosingConfirmation } from '@/lib/telegram';
 
 const PAYMENT_DELAY_MS = 1400; // имитация ответа банка
@@ -23,6 +25,7 @@ export default function CheckoutPage() {
 
   const [method, setMethod] = useState('sbp');
   const [status, setStatus] = useState('idle'); // idle | paying | paid
+  const [ticketId, setTicketId] = useState(null);
   const secondsLeft = useCountdown(RESERVATION_SECONDS, status !== 'paid');
   const expired = secondsLeft === 0 && status !== 'paid';
 
@@ -49,6 +52,9 @@ export default function CheckoutPage() {
     haptic('medium');
     setStatus('paying');
     payTimer.current = setTimeout(() => {
+      const ticket = createTicket({ event, offer, total, method });
+      addTicket(ticket);
+      setTicketId(ticket.id);
       setStatus('paid');
       haptic('success');
     }, PAYMENT_DELAY_MS);
@@ -109,7 +115,7 @@ export default function CheckoutPage() {
         total={total}
         eventTitle={event.title}
         onClose={() => navigate(`/event/${event.id}`, { replace: true })}
-        onTickets={() => navigate('/tickets', { replace: true })}
+        onTickets={() => navigate(`/tickets/${ticketId}`, { replace: true })}
       />
     </>
   );

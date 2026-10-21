@@ -26,6 +26,14 @@ export function formatLongDate(iso) {
 export const formatTime = (iso) =>
   new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
 
+// «Через 38 дней», «Завтра», «Сегодня»
+export function formatDaysLeft(iso, now = Date.now()) {
+  const days = Math.ceil((new Date(iso).getTime() - now) / 86_400_000);
+  if (days <= 0) return 'Сегодня';
+  if (days === 1) return 'Завтра';
+  return `Через ${days} ${plural(days, ['день', 'дня', 'дней'])}`;
+}
+
 // 14:45
 export function formatCountdown(seconds) {
   const m = Math.floor(seconds / 60);
