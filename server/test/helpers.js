@@ -18,6 +18,13 @@ export async function setup() {
 export const tma = (user) =>
   `tma ${signInitData({ user, auth_date: Math.floor(Date.now() / 1000), query_id: 'q1' }, TOKEN)}`;
 
+// Ответ requestContact, подписанный как будто Telegram
+export const signedContact = (user, phone = '79991234567', authDate = Math.floor(Date.now() / 1000)) =>
+  signInitData({ contact: { user_id: user.id, phone_number: phone, first_name: user.first_name }, auth_date: authDate }, TOKEN);
+
+export const verifyPhone = (app, user, response = signedContact(user)) =>
+  app.inject({ method: 'POST', url: '/api/me/phone', payload: { response }, headers: { authorization: tma(user) } });
+
 export const users = {
   alice: { id: 1001, first_name: 'Алиса', last_name: 'Иванова' },
   bob: { id: 1002, first_name: 'Борис' },

@@ -1,5 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { NEW_SELLER_ACTIVE_LIMIT } from '../../shared/listingRules.js';
+import { confirmPhone } from '@/data/accountStore';
+import { useServerAccount } from '@/hooks/useServerAccount';
+import { apiEnabled } from '@/lib/api';
 import Icon from '@/components/icons/Icon';
 import TopBar from '@/components/layout/TopBar';
 import ListingCard from '@/components/sell/ListingCard';
@@ -26,6 +30,19 @@ export default function SellPage() {
   const active = listings.filter((l) => l.status === 'active');
   const archived = listings.filter((l) => l.status !== 'active');
 
+  // Допуск к продаже (только в режиме сервера — правила проверяет он же)
+  const account = useServerAccount();
+  const needsPhone = account.status === 'ok' && !account.user.phoneVerified;
+  const sold = listings.filter((l) => l.status === 'sold').length;
+  const atLimit = apiEnabled && sold === 0 && active.length >= NEW_SELLER_ACTIVE_LIMIT;
+  const [phoneBusy, setPhoneBusy] = useState(false);
+  const [phoneError, setPhoneError] = useState(null);
+  const onConfirmPhone = async () => {
+    setPhoneBusy(true);
+    setPhoneError(await confirmPhone());
+    setPhoneBusy(false);
+  };
+
   const start = () => {
     haptic('medium');
     navigate('/sell/new');
@@ -51,9 +68,31 @@ export default function SellPage() {
               </li>
             ))}
           </ul>
-          <Button size="lg" block icon="tab-sell" className="mt-5" onClick={start}>
-            Выставить билет
-          </Button>
+          {needsPhone ? (
+            // Защита от мошенников: продавать можно только с номером, подтверждённым Telegram
+            <div className="mt-5 rounded-2xl bg-brand-soft/60 p-4">
+              <p className="text-subhead font-semibold">Подтвердите номер телефона</p>
+              <p className="mt-1 text-footnote text-label-secondary">
+                Так покупатели знают, что за объявлением стоит реальный человек. Номер увидит только Tickety —
+                в объявлении его не будет.
+              </p>
+              {phoneError && <p className="mt-2 text-footnote text-danger">{phoneError}</p>}
+              <Button size="lg" block icon="person" className="mt-3" loading={phoneBusy} onClick={onConfirmPhone}>
+                Поделиться номером
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Button size="lg" block icon="tab-sell" className="mt-5" disabled={atLimit} onClick={start}>
+                Выставить билет
+              </Button>
+              {atLimit && (
+                <p className="mt-2 text-center text-footnote text-label-secondary">
+                  Пока нет завершённых продаж, можно держать до {NEW_SELLER_ACTIVE_LIMIT} объявлений одновременно
+                </p>
+              )}
+            </>
+          )}
         </section>
 
         {loadError && (

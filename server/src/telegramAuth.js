@@ -22,7 +22,9 @@ function dataCheckString(params) {
     .join('\n');
 }
 
-export function validateInitData(raw, botToken, { maxAgeSec = 86_400, now = Date.now() } = {}) {
+// Общая проверка любой строки, подписанной Telegram этим ботом: initData и ответ requestContact
+// устроены одинаково (поля + auth_date + hash). Возвращает разобранные параметры.
+function verifySigned(raw, botToken, { maxAgeSec, now }) {
   if (!botToken) throw new AuthError('server has no BOT_TOKEN');
   if (!raw) throw new AuthError('init data is missing');
 
@@ -37,13 +39,20 @@ export function validateInitData(raw, botToken, { maxAgeSec = 86_400, now = Date
   const authDate = Number(params.get('auth_date'));
   if (!authDate) throw new AuthError('auth_date is missing');
   if (now / 1000 - authDate > maxAgeSec) throw new AuthError('init data expired');
+  return { params, authDate };
+}
 
-  let user;
+function parseJsonField(params, name) {
   try {
-    user = JSON.parse(params.get('user'));
+    return JSON.parse(params.get(name));
   } catch {
-    throw new AuthError('user is malformed');
+    throw new AuthError(`${name} is malformed`);
   }
+}
+
+export function validateInitData(raw, botToken, { maxAgeSec = 86_400, now = Date.now() } = {}) {
+  const { params, authDate } = verifySigned(raw, botToken, { maxAgeSec, now });
+  const user = parseJsonField(params, 'user');
   if (!user?.id) throw new AuthError('user is missing');
 
   return {
@@ -51,6 +60,20 @@ export function validateInitData(raw, botToken, { maxAgeSec = 86_400, now = Date
     authDate,
     queryId: params.get('query_id') ?? null,
     startParam: params.get('start_param') ?? null,
+  };
+}
+
+// Ответ WebApp.requestContact (поле response): contact={...}&auth_date=…&hash=…
+// Номер подписан Telegram — клиент не может подставить чужой. Ответ свежий: 10 минут.
+export function validateContact(raw, botToken, { maxAgeSec = 600, now = Date.now() } = {}) {
+  const { params } = verifySigned(raw, botToken, { maxAgeSec, now });
+  const contact = parseJsonField(params, 'contact');
+  if (!contact?.phone_number || !contact?.user_id) throw new AuthError('contact is missing');
+  return {
+    userId: Number(contact.user_id),
+    // Telegram присылает номер без «+» и иногда с пробелами
+    phone: `+${String(contact.phone_number).replace(/\D/g, '')}`,
+    firstName: contact.first_name ?? null,
   };
 }
 

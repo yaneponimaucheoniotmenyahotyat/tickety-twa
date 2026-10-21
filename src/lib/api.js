@@ -47,6 +47,7 @@ export async function api(path, { method = 'GET', body, form } = {}) {
 }
 
 export const getMe = () => api('/api/me');
+export const verifyPhone = (response) => api('/api/me/phone', { method: 'POST', body: { response } });
 
 // ---- Объявления ----
 export const fetchListings = () => api('/api/listings');

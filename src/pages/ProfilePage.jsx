@@ -7,6 +7,8 @@ import Badge from '@/components/ui/Badge';
 import BottomSheet from '@/components/ui/BottomSheet';
 import ListRow from '@/components/ui/ListRow';
 import Toggle from '@/components/ui/Toggle';
+import Button from '@/components/ui/Button';
+import { confirmPhone } from '@/data/accountStore';
 import { clearListings } from '@/data/listingsStore';
 import { events } from '@/data/mockData';
 import { clearFavorites, useFavorites } from '@/hooks/useFavorites';
@@ -72,6 +74,13 @@ export default function ProfilePage() {
   const [notify, setNotify] = useState(() => writeAccessPreGranted() || readNotifyPref());
   const [safeDealOpen, setSafeDealOpen] = useState(false);
   const account = useServerAccount();
+  const [phoneBusy, setPhoneBusy] = useState(false);
+  const [phoneError, setPhoneError] = useState(null);
+  const onConfirmPhone = async () => {
+    setPhoneBusy(true);
+    setPhoneError(await confirmPhone());
+    setPhoneBusy(false);
+  };
 
   const savings = useMemo(() => tickets.reduce((sum, t) => sum + ticketSavings(t), 0), [tickets]);
   const favoriteEvents = events.filter((e) => favorites.has(e.id));
@@ -212,6 +221,26 @@ export default function ProfilePage() {
                   : account.status === 'error'
                     ? account.error.message
                     : 'Подключаемся к серверу…'
+              }
+            />
+          )}
+          {account.status === 'ok' && (
+            <ListRow
+              icon="person"
+              iconClass={account.user.phoneVerified ? 'bg-success-soft text-success' : 'bg-fill text-label-secondary'}
+              title="Номер телефона"
+              subtitle={
+                phoneError ??
+                (account.user.phoneVerified
+                  ? `Подтверждён • ${account.user.phoneMasked}`
+                  : 'Нужен, чтобы продавать билеты')
+              }
+              accessory={
+                !account.user.phoneVerified && (
+                  <Button size="sm" variant="soft" loading={phoneBusy} onClick={onConfirmPhone}>
+                    Подтвердить
+                  </Button>
+                )
               }
             />
           )}

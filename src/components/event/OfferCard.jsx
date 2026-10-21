@@ -17,7 +17,7 @@ function SellerRow({ seller }) {
           {' '}
           {seller.rating == null ? (
             // Продавец с сервера без завершённых сделок — честнее, чем «★ 5.0»
-            'Новый продавец'
+            seller.phoneVerified ? 'Новый продавец • номер подтверждён' : 'Новый продавец'
           ) : (
             <>
               <span className="text-[#FF9500]">★</span> {seller.rating.toFixed(1)} ({seller.sales}{' '}

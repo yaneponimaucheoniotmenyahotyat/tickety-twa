@@ -1,6 +1,6 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { files, multipart, setup, tma, users } from './helpers.js';
+import { files, multipart, setup, tma, users, verifyPhone } from './helpers.js';
 
 // Событие из shared/catalog.js с датой в будущем (14.02.2027)
 const EVENT = 'mumiy-troll-vk';
@@ -8,6 +8,9 @@ let ctx;
 
 before(async () => {
   ctx = await setup();
+  // Продавать можно только с подтверждённым номером — здесь проверяем остальную логику
+  await verifyPhone(ctx.app, users.alice);
+  await verifyPhone(ctx.app, users.bob);
 });
 after(() => ctx.close());
 

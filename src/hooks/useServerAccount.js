@@ -1,20 +1,11 @@
-import { useEffect, useState } from 'react';
-import { apiEnabled, getMe } from '@/lib/api';
+import { useEffect, useSyncExternalStore } from 'react';
+import { getAccount, loadAccount, subscribeAccount } from '@/data/accountStore';
 
 // Состояние аккаунта на сервере: off (сервер не настроен) | loading | ok | error
 export function useServerAccount() {
-  const [state, setState] = useState(() => (apiEnabled ? { status: 'loading' } : { status: 'off' }));
-
+  const state = useSyncExternalStore(subscribeAccount, getAccount);
   useEffect(() => {
-    if (!apiEnabled) return;
-    let alive = true;
-    getMe()
-      .then((data) => alive && setState({ status: 'ok', user: data.user, isNew: data.isNew }))
-      .catch((error) => alive && setState({ status: 'error', error }));
-    return () => {
-      alive = false;
-    };
-  }, []);
-
+    if (state.status === 'loading') loadAccount();
+  }, [state.status]);
   return state;
 }

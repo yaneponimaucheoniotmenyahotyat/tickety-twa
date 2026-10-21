@@ -5,6 +5,8 @@ import { ZONES } from './catalog.js';
 export const MAX_FILE_MB = 10;
 export const MIN_PRICE = 100;
 export const MAX_QUANTITY = 4;
+// Новый продавец (нет завершённых продаж) держит не больше стольких активных объявлений
+export const NEW_SELLER_ACTIVE_LIMIT = 3;
 
 // Зоны без мест — свободная рассадка
 const GENERAL_ADMISSION = new Set(['dance', 'fan']);

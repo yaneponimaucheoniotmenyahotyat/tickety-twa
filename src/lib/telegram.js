@@ -106,5 +106,19 @@ export function requestWriteAccess() {
   return new Promise((resolve) => tg.requestWriteAccess((granted) => resolve(Boolean(granted))));
 }
 
+// Номер телефона через нативный диалог Telegram (Bot API 6.9+).
+// Возвращает сырую подписанную строку response — её проверяет сервер, а не приложение.
+// null — пользователь отказался или мы не в Telegram.
+export function requestContact() {
+  if (!isTelegram || !supports('6.9')) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      tg.requestContact((sent, event) => resolve(sent && event?.response ? event.response : null));
+    } catch {
+      resolve(null); // запрос уже открыт — повторный вызов Telegram отклоняет
+    }
+  });
+}
+
 // Пользователь уже разрешил писать при старте (например, открыл Mini App из чата с ботом)
 export const writeAccessPreGranted = () => Boolean(tg?.initDataUnsafe?.user?.allows_write_to_pm);

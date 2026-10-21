@@ -1,6 +1,13 @@
 // Объявления: загрузка и проверка билета, создание, списки, снятие с продажи.
 import { ZONES, events, offers as demoOffers } from '../../shared/catalog.js';
-import { MAX_FILE_MB, MAX_QUANTITY, listingTitle, priceError, recognizeTicket } from '../../shared/listingRules.js';
+import {
+  MAX_FILE_MB,
+  MAX_QUANTITY,
+  NEW_SELLER_ACTIVE_LIMIT,
+  listingTitle,
+  priceError,
+  recognizeTicket,
+} from '../../shared/listingRules.js';
 import { detectKind, kindLabel, sha256, storeFile } from './ticketFiles.js';
 
 export class HttpError extends Error {
@@ -21,6 +28,28 @@ function upcomingEvent(eventId) {
   return event;
 }
 
+// Допуск к продаже — защита от мошенников без юрлица:
+//   • номер телефона подтверждён подписью Telegram (сим-карты в РФ — по паспорту);
+//   • пока нет завершённых продаж — не больше NEW_SELLER_ACTIVE_LIMIT активных объявлений.
+async function assertCanSell(db, user) {
+  if (!user.phone_verified_at) {
+    throw new HttpError(403, 'phone_required', 'Чтобы продавать, подтвердите номер телефона');
+  }
+  const [{ active, sold }] = await db.query(
+    `SELECT count(*) FILTER (WHERE status = 'active')::int AS active,
+            count(*) FILTER (WHERE status = 'sold')::int AS sold
+     FROM listings WHERE seller_id = $1`,
+    [user.id],
+  );
+  if (sold === 0 && active >= NEW_SELLER_ACTIVE_LIMIT) {
+    throw new HttpError(
+      403,
+      'new_seller_limit',
+      `Пока нет завершённых продаж, можно держать не больше ${NEW_SELLER_ACTIVE_LIMIT} объявлений одновременно`,
+    );
+  }
+}
+
 // «Алексей М.» — имя и первая буква фамилии, как у демо-продавцов
 const sellerName = (row) => [row.first_name, row.last_name ? `${row.last_name[0]}.` : null].filter(Boolean).join(' ');
 
@@ -38,7 +67,12 @@ function toOffer(row, viewerId) {
     price: row.price,
     quantity: row.quantity,
     verified: true,
-    seller: { name: sellerName(row), rating: null, sales: Number(row.seller_sales ?? 0) },
+    seller: {
+      name: sellerName(row),
+      rating: null,
+      sales: Number(row.seller_sales ?? 0),
+      phoneVerified: Boolean(row.phone_verified_at),
+    },
     own: viewerId != null && Number(row.seller_id) === Number(viewerId),
     status: row.status,
     createdAt: row.created_at,
@@ -46,7 +80,7 @@ function toOffer(row, viewerId) {
 }
 
 const LISTING_SELECT = `
-  SELECT l.*, u.first_name, u.last_name,
+  SELECT l.*, u.first_name, u.last_name, u.phone_verified_at,
          (SELECT count(*) FROM listings s WHERE s.seller_id = l.seller_id AND s.status = 'sold') AS seller_sales
   FROM listings l JOIN users u ON u.id = l.seller_id`;
 
@@ -65,6 +99,7 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
 
   // Шаг «Загрузите билет»: multipart с полями eventId и file
   app.post('/api/ticket-checks', { preHandler: requireUser }, async (req, reply) => {
+    await assertCanSell(db, req.user); // до загрузки файла — не принимаем его зря
     let part;
     try {
       part = await req.file({ limits: { fileSize: MAX_FILE_MB * 1024 * 1024, files: 1, fields: 5 } });
@@ -137,6 +172,7 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
     },
     async (req, reply) => {
       const { checkId, price, quantity } = req.body;
+      await assertCanSell(db, req.user);
       const [check] = await db.query(`SELECT * FROM ticket_checks WHERE id = $1 AND user_id = $2`, [checkId, req.user.id]);
       if (!check) throw new HttpError(404, 'check_not_found', 'Проверка билета не найдена — загрузите файл заново');
       upcomingEvent(check.event_id);

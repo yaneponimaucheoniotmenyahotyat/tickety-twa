@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { HttpError, registerListingRoutes } from './listings.js';
-import { AuthError, validateInitData } from './telegramAuth.js';
+import { AuthError, validateContact, validateInitData } from './telegramAuth.js';
 
 // Сборка приложения отдельно от запуска — тесты поднимают его без сети (app.inject)
 export async function buildApp({ config, db, logger = false }) {
@@ -62,7 +62,7 @@ export async function buildApp({ config, db, logger = false }) {
          allows_write_to_pm = users.allows_write_to_pm OR EXCLUDED.allows_write_to_pm,
          last_seen_at = now()
        RETURNING id, first_name, last_name, username, photo_url, is_premium, allows_write_to_pm,
-                 created_at, last_seen_at, (xmax = 0) AS inserted`,
+                 phone, phone_verified_at, created_at, last_seen_at, (xmax = 0) AS inserted`,
       [
         u.id,
         u.first_name ?? '',
@@ -86,6 +86,9 @@ export async function buildApp({ config, db, logger = false }) {
     if (req.headers.authorization) await requireUser(req);
   };
 
+  // Номер целиком наружу не отдаём даже владельцу: в интерфейсе хватает последних цифр
+  const maskPhone = (phone) => (phone ? `${phone.slice(0, 2)} ••• •••-${phone.slice(-4, -2)}-${phone.slice(-2)}` : null);
+
   const publicUser = (row) => ({
     id: Number(row.id),
     firstName: row.first_name,
@@ -94,6 +97,8 @@ export async function buildApp({ config, db, logger = false }) {
     photoUrl: row.photo_url,
     isPremium: row.is_premium,
     allowsWriteToPm: row.allows_write_to_pm,
+    phoneVerified: Boolean(row.phone_verified_at),
+    phoneMasked: maskPhone(row.phone),
     createdAt: row.created_at,
   });
 
@@ -106,6 +111,40 @@ export async function buildApp({ config, db, logger = false }) {
     user: publicUser(req.user),
     isNew: req.user.inserted,
   }));
+
+  // Подтверждение номера: тело — сырая строка response из WebApp.requestContact.
+  // Подпись проверяется токеном бота; номер должен принадлежать тому, кто вошёл.
+  app.post(
+    '/api/me/phone',
+    {
+      preHandler: requireUser,
+      schema: {
+        body: {
+          type: 'object',
+          required: ['response'],
+          additionalProperties: false,
+          properties: { response: { type: 'string', minLength: 1, maxLength: 4096 } },
+        },
+      },
+    },
+    async (req) => {
+      const contact = validateContact(req.body.response, config.botToken);
+      if (contact.userId !== Number(req.user.id)) {
+        throw new HttpError(400, 'foreign_contact', 'Это не ваш номер — поделитесь своим контактом');
+      }
+      const [row] = await db.query(
+        `UPDATE users SET phone = $2, phone_verified_at = now() WHERE id = $1
+         RETURNING id, first_name, last_name, username, photo_url, is_premium, allows_write_to_pm,
+                   phone, phone_verified_at, created_at`,
+        [req.user.id, contact.phone],
+      );
+      await db.query(
+        `INSERT INTO identity_verifications (user_id, method, subject) VALUES ($1, 'telegram_phone', $2)`,
+        [req.user.id, contact.phone],
+      );
+      return { user: publicUser(row) };
+    },
+  );
 
   registerListingRoutes(app, { db, config, requireUser, optionalUser });
 
