@@ -2,8 +2,10 @@
 // Не задан — приложение работает как раньше, только на устройстве (localStorage).
 import { tg } from './telegram';
 
-const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
-export const apiEnabled = Boolean(BASE);
+// VITE_API_URL=/ — API на том же адресе, что и приложение (режим phone-api через туннель)
+const RAW = import.meta.env.VITE_API_URL || '';
+const BASE = RAW.replace(/\/$/, '');
+export const apiEnabled = Boolean(RAW);
 
 export class ApiError extends Error {
   constructor(status, code, message) {

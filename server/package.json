@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "node --watch --env-file-if-exists=.env src/index.js",
+    "public": "node --env-file-if-exists=.env src/public.js",
     "start": "node src/index.js",
     "test": "node --test"
   },

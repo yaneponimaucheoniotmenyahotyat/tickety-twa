@@ -10,7 +10,8 @@
     "tunnel:cf": "cloudflared tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:5173",
     "build": "vite build",
     "preview": "vite preview",
-    "phone": "vite build && vite preview"
+    "phone": "vite build && vite preview",
+    "phone:api": "vite build --mode phone-api && vite preview --mode phone-api"
   },
   "dependencies": {
     "qrcode-generator": "2.0.4",

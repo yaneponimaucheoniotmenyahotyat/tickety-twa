@@ -36,13 +36,19 @@ const svgrFor = (include, svgoConfig) =>
 //   Cloudflare    → https://<слова>.trycloudflare.com (у части провайдеров РФ режется DPI)
 const TUNNEL_HOSTS = ['.lhr.life', '.trycloudflare.com'];
 
-// Режим tunnel (npm run dev:tunnel): сервер доступен только через HTTPS-туннель,
-// HMR-сокет идёт через тот же туннель (wss, порт 443), а не на :5173.
+// Запросы /api с того же адреса пересылаются локальному серверу (server/, порт 8787).
+// Так через один туннель идут и приложение, и API — без отдельного адреса и CORS.
+const API_PROXY = { '/api': 'http://127.0.0.1:8787' };
+
+// Режимы:
+//   tunnel    (npm run dev:tunnel) — HMR-сокет идёт через туннель (wss, порт 443), а не на :5173
+//   phone-api (npm run phone:api)  — сборка ходит в API по тому же адресу (VITE_API_URL=/)
 export default defineConfig(({ mode }) => ({
   base: './', // TWA часто хостится не в корне домена
   define: {
     __APP_VERSION__: JSON.stringify(version),
     __APP_COMMIT__: JSON.stringify(commit),
+    ...(mode === 'phone-api' ? { 'import.meta.env.VITE_API_URL': JSON.stringify('/') } : {}),
   },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
@@ -65,11 +71,13 @@ export default defineConfig(({ mode }) => ({
     // Временные файлы браузера/Windows в папке проекта бывают заблокированы (EBUSY)
     // и роняют наблюдатель — их не отслеживаем.
     watch: { ignored: ['**/*.url', '**/*.crdownload', '**/*.tmp', '**/*.partial'] },
+    proxy: API_PROXY,
   },
   preview: {
     host: '127.0.0.1',
     port: 5173,
     strictPort: true,
     allowedHosts: TUNNEL_HOSTS,
+    proxy: API_PROXY,
   },
 }));
