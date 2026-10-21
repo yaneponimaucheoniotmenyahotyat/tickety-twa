@@ -2,28 +2,22 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useTelegramBackButton } from './hooks/useTelegramBackButton';
 import TabBar from './components/layout/TabBar';
-import TopBar from './components/layout/TopBar';
 import HomePage from './pages/HomePage';
 import EventPage from './pages/EventPage';
 import CheckoutPage from './pages/CheckoutPage';
 import TicketsPage from './pages/TicketsPage';
 import TicketPage from './pages/TicketPage';
 import ProfilePage from './pages/ProfilePage';
+import SellPage from './pages/SellPage';
+import SellWizardPage from './pages/SellWizardPage';
 
-// Разделы вне MVP — заглушки, чтобы таб-бар был живым
-const Placeholder = ({ title }) => (
-  <>
-    <TopBar title={title} />
-    <div className="px-gutter pt-4">
-      <div className="card p-6 text-center text-subhead text-label-secondary">Раздел появится в следующей версии</div>
-    </div>
-  </>
-);
+// Экраны со своей кнопкой действия внизу — таб-бар бы её перекрывал
+const NO_TAB_BAR = ['/checkout', '/sell/new'];
 
 export default function App() {
   useTelegramBackButton();
   const { pathname } = useLocation();
-  const withTabBar = !pathname.startsWith('/checkout');
+  const withTabBar = !NO_TAB_BAR.some((p) => pathname.startsWith(p));
 
   // Новый экран открывается с начала, как push в UINavigationController
   useEffect(() => {
@@ -38,7 +32,8 @@ export default function App() {
         <Route path="/checkout/:offerId" element={<CheckoutPage />} />
         <Route path="/tickets" element={<TicketsPage />} />
         <Route path="/tickets/:id" element={<TicketPage />} />
-        <Route path="/sell" element={<Placeholder title="Продать" />} />
+        <Route path="/sell" element={<SellPage />} />
+        <Route path="/sell/new" element={<SellWizardPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

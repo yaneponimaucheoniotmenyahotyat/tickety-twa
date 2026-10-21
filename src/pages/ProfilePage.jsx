@@ -7,6 +7,7 @@ import Badge from '@/components/ui/Badge';
 import BottomSheet from '@/components/ui/BottomSheet';
 import ListRow from '@/components/ui/ListRow';
 import Toggle from '@/components/ui/Toggle';
+import { clearListings } from '@/data/listingsStore';
 import { events } from '@/data/mockData';
 import { clearFavorites, useFavorites } from '@/hooks/useFavorites';
 import { clearTickets, useTickets } from '@/hooks/useTickets';
@@ -88,10 +89,11 @@ export default function ProfilePage() {
   };
 
   const resetData = async () => {
-    const ok = await confirmDialog('Удалить купленные билеты и избранное с этого устройства?');
+    const ok = await confirmDialog('Удалить купленные билеты, объявления и избранное с этого устройства?');
     if (!ok) return;
     clearTickets();
     clearFavorites();
+    clearListings();
     haptic('success');
   };
 

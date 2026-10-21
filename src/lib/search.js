@@ -33,6 +33,7 @@ const offerMatches = (o, f) => {
   const [lo, hi] = f.price;
   const max = hi >= PRICE_LIMIT ? Infinity : hi; // «20 000+ ₽» — без верхней границы
   return (
+    !o.own && // свои объявления купить нельзя — в «от N ₽» и фильтрах их не учитываем
     o.price >= lo &&
     o.price <= max &&
     (!f.aiVerified || o.verified) &&

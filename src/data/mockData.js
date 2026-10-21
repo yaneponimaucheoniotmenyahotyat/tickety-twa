@@ -1,5 +1,6 @@
 // Mock-данные MVP. Правило биржи Tickety: цена перепродажи ≤ номинала («Честная цена»).
 // Позже этот файл заменяется на API-слой с теми же функциями-селекторами внизу.
+import { getListingOffers } from './listingsStore';
 
 export const CITIES = ['Москва', 'Санкт-Петербург'];
 
@@ -186,11 +187,14 @@ export const RESERVATION_SECONDS = 15 * 60;
 
 // ---- Селекторы ----
 
-export const getEvent = (id) => events.find((e) => e.id === id);
-export const getOffer = (id) => offers.find((o) => o.id === id);
-export const getOffersByEvent = (eventId) => offers.filter((o) => o.eventId === eventId);
+// Лоты витрины = демо-лоты + активные объявления пользователя («Продать»)
+const allOffers = () => [...offers, ...getListingOffers()];
 
-export const getMinPrice = (eventId, list = offers) =>
+export const getEvent = (id) => events.find((e) => e.id === id);
+export const getOffer = (id) => allOffers().find((o) => o.id === id);
+export const getOffersByEvent = (eventId) => allOffers().filter((o) => o.eventId === eventId);
+
+export const getMinPrice = (eventId, list = allOffers()) =>
   Math.min(...list.filter((o) => o.eventId === eventId).map((o) => o.price));
 
 export const getVenues = () => [...new Set(events.map((e) => e.venue))];

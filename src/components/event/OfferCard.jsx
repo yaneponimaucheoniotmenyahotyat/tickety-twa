@@ -33,7 +33,12 @@ export default function OfferCard({ offer }) {
   };
 
   return (
-    <article className="card p-4">
+    <article className={`card p-4 ${offer.own ? 'ring-2 ring-inset ring-brand/40' : ''}`}>
+      {offer.own && (
+        <Badge tone="brand" icon="tab-sell" className="mb-2">
+          Ваше объявление
+        </Badge>
+      )}
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-headline">{offer.title}</h3>
         {offer.verified && (
@@ -62,9 +67,15 @@ export default function OfferCard({ offer }) {
             {note.text}
           </p>
         </div>
-        <Button icon="bolt" onClick={buy}>
-          Купить через СБП
-        </Button>
+        {offer.own ? (
+          <Button variant="soft" iconRight="chevron-right" onClick={() => navigate('/sell')}>
+            Управлять
+          </Button>
+        ) : (
+          <Button icon="bolt" onClick={buy}>
+            Купить через СБП
+          </Button>
+        )}
       </div>
     </article>
   );

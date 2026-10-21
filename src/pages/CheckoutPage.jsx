@@ -43,6 +43,8 @@ export default function CheckoutPage() {
   useEffect(() => () => clearTimeout(payTimer.current), []);
 
   if (!offer || !event) return <Navigate to="/" replace />;
+  // Свой билет купить нельзя (прямой переход по ссылке /checkout/<id своего объявления>)
+  if (offer.own) return <Navigate to={`/event/${event.id}`} replace />;
 
   const subtotal = offer.price * offer.quantity;
   const fee = Math.round((subtotal * SERVICE_FEE_PERCENT) / 100);
