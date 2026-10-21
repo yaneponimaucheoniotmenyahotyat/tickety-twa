@@ -9,9 +9,10 @@ import TicketUploadStep from '@/components/sell/TicketUploadStep';
 import WizardProgress from '@/components/sell/WizardProgress';
 import BottomSheet from '@/components/ui/BottomSheet';
 import Button from '@/components/ui/Button';
-import { addListing } from '@/data/listingsStore';
+import { addListing, publishListing } from '@/data/listingsStore';
 import { getEvent, getOffersByEvent } from '@/data/mockData';
-import { analyzeTicket, listingTitle, validateFile } from '@/lib/ticketCheck';
+import { apiEnabled, uploadTicket } from '@/lib/api';
+import { analyzeTicketLocally, listingTitle, runCheckAnimation, validateFile } from '@/lib/ticketCheck';
 import { getUser, haptic, setClosingConfirmation } from '@/lib/telegram';
 
 const IDLE_CHECK = { status: 'idle', step: 0, error: null };
@@ -31,6 +32,10 @@ export default function SellWizardPage() {
   const [price, setPrice] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [createdId, setCreatedId] = useState(null);
+  // Режим сервера: id проверки билета — объявление создаётся по нему, номинал знает сервер
+  const [checkId, setCheckId] = useState(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState(null);
 
   const event = eventId ? getEvent(eventId) : null;
   const n = Number(price) || 0;
@@ -74,6 +79,7 @@ export default function SellWizardPage() {
     const error = validateFile(f);
     setFile(f);
     setDetails(null);
+    setCheckId(null);
     setPrice('');
     if (error) {
       haptic('error');
@@ -81,16 +87,52 @@ export default function SellWizardPage() {
       return;
     }
     setCheck({ status: 'running', step: 0, error: null });
-    const result = await analyzeTicket(f, getOffersByEvent(eventId).filter((o) => !o.own), (i) =>
-      setCheck((c) => ({ ...c, step: i })),
-    );
+
+    // С сервером: файл уходит на проверку (формат по содержимому, дубли, номинал).
+    // Без сервера: локальная «распознавалка». Анимация чек-листа идёт параллельно.
+    const work = apiEnabled
+      ? uploadTicket(f, eventId).then((r) => {
+          setCheckId(r.checkId);
+          return r.details;
+        })
+      : Promise.resolve(analyzeTicketLocally(f, getOffersByEvent(eventId).filter((o) => !o.own && !o.status)));
+
+    let result;
+    try {
+      result = await runCheckAnimation(work, (i) => setCheck((c) => ({ ...c, step: i })));
+    } catch (e) {
+      haptic('error');
+      setCheck({ status: 'error', step: 0, error: e.message });
+      return;
+    }
     haptic('success');
     setDetails(result);
     setPrice(String(result.nominal));
     setCheck({ status: 'done', step: 4, error: null });
   };
 
-  const publish = () => {
+  const publish = async () => {
+    if (apiEnabled) {
+      setPublishing(true);
+      setPublishError(null);
+      try {
+        const listing = await publishListing({
+          checkId,
+          price: n,
+          quantity,
+          ...(details.seated ? { sector: details.sector, row: details.row, seat: details.seat } : {}),
+        });
+        haptic('success');
+        setCreatedId(listing.id);
+      } catch (e) {
+        haptic('error');
+        setPublishError(e.message);
+      } finally {
+        setPublishing(false);
+      }
+      return;
+    }
+
     const user = getUser();
     const listing = {
       id: `l-${Date.now().toString(36)}`,
@@ -128,9 +170,12 @@ export default function SellWizardPage() {
       </Button>
     ),
     4: (
-      <Button size="lg" block icon="bolt" disabled={!confirmed} onClick={publish}>
-        Выставить на продажу
-      </Button>
+      <>
+        {publishError && <p className="mb-2 text-center text-footnote text-danger">{publishError}</p>}
+        <Button size="lg" block icon="bolt" disabled={!confirmed} loading={publishing} onClick={publish}>
+          {publishing ? 'Публикуем…' : 'Выставить на продажу'}
+        </Button>
+      </>
     ),
   }[step];
 

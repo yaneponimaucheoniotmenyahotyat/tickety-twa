@@ -1,8 +1,9 @@
 import Icon from '@/components/icons/Icon';
 import Chip from '@/components/ui/Chip';
 import { formatPrice, plural } from '@/lib/format';
+import { MIN_PRICE } from '@/lib/ticketCheck';
 
-export const MIN_PRICE = 100;
+export { MIN_PRICE };
 const roundDown100 = (n) => Math.floor(n / 100) * 100;
 
 // Шаг 3: цена за билет. Выше номинала — нельзя (правило «Честной цены»),

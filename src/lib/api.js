@@ -21,7 +21,8 @@ function authorization() {
   return null;
 }
 
-export async function api(path, { method = 'GET', body } = {}) {
+// body — JSON; form — FormData (загрузка файла, Content-Type с boundary ставит браузер)
+export async function api(path, { method = 'GET', body, form } = {}) {
   if (!apiEnabled) throw new ApiError(0, 'disabled', 'Сервер не настроен');
   const headers = {};
   const auth = authorization();
@@ -30,7 +31,11 @@ export async function api(path, { method = 'GET', body } = {}) {
 
   let res;
   try {
-    res = await fetch(`${BASE}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: form ?? (body === undefined ? undefined : JSON.stringify(body)),
+    });
   } catch {
     throw new ApiError(0, 'network', 'Нет связи с сервером');
   }
@@ -40,3 +45,18 @@ export async function api(path, { method = 'GET', body } = {}) {
 }
 
 export const getMe = () => api('/api/me');
+
+// ---- Объявления ----
+export const fetchListings = () => api('/api/listings');
+export const fetchMyListings = () => api('/api/me/listings');
+
+// eventId — до файла: сервер читает поля формы, которые пришли раньше файла
+export function uploadTicket(file, eventId) {
+  const form = new FormData();
+  form.append('eventId', eventId);
+  form.append('file', file, file.name);
+  return api('/api/ticket-checks', { method: 'POST', form });
+}
+
+export const createListing = (body) => api('/api/listings', { method: 'POST', body });
+export const withdrawListingRemote = (id) => api(`/api/listings/${id}/withdraw`, { method: 'POST' });

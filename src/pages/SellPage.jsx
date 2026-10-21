@@ -1,10 +1,12 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '@/components/icons/Icon';
 import TopBar from '@/components/layout/TopBar';
 import ListingCard from '@/components/sell/ListingCard';
 import Button from '@/components/ui/Button';
 import { getEvent } from '@/data/mockData';
-import { useListings } from '@/hooks/useListings';
+import { refreshListings } from '@/data/listingsStore';
+import { useListings, useListingsError } from '@/hooks/useListings';
 import { haptic } from '@/lib/telegram';
 
 const RULES = [
@@ -16,6 +18,11 @@ const RULES = [
 export default function SellPage() {
   const navigate = useNavigate();
   const listings = useListings();
+  const loadError = useListingsError();
+
+  useEffect(() => {
+    refreshListings();
+  }, []);
   const active = listings.filter((l) => l.status === 'active');
   const archived = listings.filter((l) => l.status !== 'active');
 
@@ -48,6 +55,12 @@ export default function SellPage() {
             Выставить билет
           </Button>
         </section>
+
+        {loadError && (
+          <p className="rounded-xl bg-danger-soft px-4 py-3 text-subhead text-danger">
+            Не удалось загрузить объявления: {loadError}
+          </p>
+        )}
 
         {active.length > 0 && (
           <>

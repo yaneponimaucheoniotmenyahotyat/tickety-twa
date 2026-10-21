@@ -16,7 +16,7 @@ const tma = (user) =>
 before(async () => {
   db = await openDb({ dataDir: 'memory://' });
   await migrate(db);
-  const config = loadConfig({ BOT_TOKEN: TOKEN });
+  const config = loadConfig({ BOT_TOKEN: TOKEN, UPLOAD_DIR: 'off' });
   app = await buildApp({ config, db });
 });
 

@@ -15,8 +15,15 @@ function SellerRow({ seller }) {
         <span className="font-semibold">{seller.name}</span>
         <span className="text-label-secondary">
           {' '}
-          <span className="text-[#FF9500]">★</span> {seller.rating.toFixed(1)} ({seller.sales}{' '}
-          {plural(seller.sales, ['продажа', 'продажи', 'продаж'])})
+          {seller.rating == null ? (
+            // Продавец с сервера без завершённых сделок — честнее, чем «★ 5.0»
+            'Новый продавец'
+          ) : (
+            <>
+              <span className="text-[#FF9500]">★</span> {seller.rating.toFixed(1)} ({seller.sales}{' '}
+              {plural(seller.sales, ['продажа', 'продажи', 'продаж'])})
+            </>
+          )}
         </span>
       </span>
       <Icon name="shield-check" className="ml-auto h-5 w-5 shrink-0 text-success" />

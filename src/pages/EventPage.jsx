@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useListingOffers } from '@/hooks/useListings';
 import { Navigate, useParams } from 'react-router-dom';
 import Icon from '@/components/icons/Icon';
 import TopBar, { BackLink } from '@/components/layout/TopBar';
@@ -30,9 +31,10 @@ function InfoRow({ icon, title, subtitle, action }) {
 export default function EventPage() {
   const { id } = useParams();
   const event = getEvent(id);
+  const listingOffers = useListingOffers(); // перерисовка, когда пришли объявления с сервера
   const allOffers = useMemo(
     () => (event ? getOffersByEvent(event.id).sort((a, b) => a.price - b.price) : []),
-    [event],
+    [event, listingOffers],
   );
   const [zone, setZone] = useState('all');
 

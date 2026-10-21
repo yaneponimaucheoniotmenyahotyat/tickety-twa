@@ -12,8 +12,13 @@ export default function ListingCard({ listing, event }) {
   const withdraw = async () => {
     const ok = await confirmDialog('Снять билет с продажи? Покупатели перестанут его видеть.');
     if (!ok) return;
-    withdrawListing(listing.id);
-    haptic('success');
+    try {
+      await withdrawListing(listing.id);
+      haptic('success');
+    } catch (e) {
+      haptic('error');
+      await confirmDialog(`Не получилось снять с продажи: ${e.message}`);
+    }
   };
 
   return (

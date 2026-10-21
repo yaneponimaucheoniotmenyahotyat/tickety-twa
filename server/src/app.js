@@ -1,19 +1,29 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
+import { HttpError, registerListingRoutes } from './listings.js';
 import { AuthError, validateInitData } from './telegramAuth.js';
 
 // Сборка приложения отдельно от запуска — тесты поднимают его без сети (app.inject)
 export async function buildApp({ config, db, logger = false }) {
-  const app = Fastify({ logger, trustProxy: true });
+  const app = Fastify({
+    logger,
+    trustProxy: true,
+    // Лишние поля в теле — ошибка 400, а не молчаливое удаление: попытка подсунуть,
+    // например, свой nominal должна быть видна, а не тихо проглочена
+    ajv: { customOptions: { removeAdditional: false } },
+  });
 
   await app.register(cors, {
     origin: config.allowedOrigins,
     allowedHeaders: ['Authorization', 'Content-Type'],
     maxAge: 600,
   });
+  await app.register(multipart);
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof AuthError) return reply.code(401).send({ error: 'unauthorized', message: err.message });
+    if (err instanceof HttpError) return reply.code(err.status).send({ error: err.code, message: err.message });
     if (err.validation) return reply.code(400).send({ error: 'bad_request', message: err.message });
     req.log.error(err);
     return reply.code(500).send({ error: 'internal', message: 'Что-то пошло не так' });
@@ -71,6 +81,10 @@ export async function buildApp({ config, db, logger = false }) {
   const requireUser = async (req) => {
     req.user = await upsertUser(authenticate(req));
   };
+  // Для публичных списков: без заголовка — гость, с неверной подписью — 401
+  const optionalUser = async (req) => {
+    if (req.headers.authorization) await requireUser(req);
+  };
 
   const publicUser = (row) => ({
     id: Number(row.id),
@@ -92,6 +106,8 @@ export async function buildApp({ config, db, logger = false }) {
     user: publicUser(req.user),
     isNew: req.user.inserted,
   }));
+
+  registerListingRoutes(app, { db, config, requireUser, optionalUser });
 
   return app;
 }

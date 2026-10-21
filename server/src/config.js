@@ -1,4 +1,6 @@
 // Конфигурация из переменных окружения. Ошибки — сразу при старте, а не на первом запросе.
+import { fileURLToPath } from 'node:url';
+
 const DEFAULT_ORIGINS = [
   'http://127.0.0.1:5173',
   'http://localhost:5173',
@@ -26,5 +28,8 @@ export function loadConfig(env = process.env) {
       : DEFAULT_ORIGINS,
     initDataMaxAge: Number(env.INIT_DATA_MAX_AGE) || 86_400,
     allowDevAuth,
+    // Куда сохранять файлы билетов. 'off' — не сохранять (тесты)
+    uploadDir:
+      env.UPLOAD_DIR === 'off' ? null : env.UPLOAD_DIR || fileURLToPath(new URL('../.data/uploads', import.meta.url)),
   };
 }

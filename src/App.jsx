@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useTelegramBackButton } from './hooks/useTelegramBackButton';
+import { refreshListings } from './data/listingsStore';
 import TabBar from './components/layout/TabBar';
 import HomePage from './pages/HomePage';
 import EventPage from './pages/EventPage';
@@ -18,6 +19,11 @@ export default function App() {
   useTelegramBackButton();
   const { pathname } = useLocation();
   const withTabBar = !NO_TAB_BAR.some((p) => pathname.startsWith(p));
+
+  // Объявления с сервера — один раз при запуске (без сервера ничего не делает)
+  useEffect(() => {
+    refreshListings();
+  }, []);
 
   // Новый экран открывается с начала, как push в UINavigationController
   useEffect(() => {

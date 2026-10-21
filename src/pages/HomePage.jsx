@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useListingOffers } from '@/hooks/useListings';
 import Icon from '@/components/icons/Icon';
 import { AvatarButton } from '@/components/layout/TopBar';
 import EventCard from '@/components/event/EventCard';
@@ -18,7 +19,12 @@ export default function HomePage() {
   const [sort, setSort] = useState('popularity');
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const results = useMemo(() => searchEvents({ query, filters, sort }), [query, filters, sort]);
+  // Объявления с сервера приходят асинхронно — пересчитываем выдачу, когда они обновились
+  const listingOffers = useListingOffers();
+  const results = useMemo(
+    () => searchEvents({ query, filters, sort }),
+    [query, filters, sort, listingOffers],
+  );
 
   const cycleSort = () => {
     haptic('selection');

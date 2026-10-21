@@ -1,10 +1,12 @@
-// Проверка загруженного билета.
-// Реально: тип и размер файла. Имитация: «распознавание» ИИ — данные детерминированно
-// выводятся из имени/размера файла и лотов события. С бэкендом здесь будет загрузка
-// файла на сервер, чтение штрихкода и сверка с API организатора.
-import { ZONES } from '@/data/mockData';
+// Проверка загруженного билета на стороне приложения.
+// С сервером: файл уходит на сервер, там определяется формат по содержимому, ищутся дубли
+// и вычисляется номинал. Без сервера (локальный режим) — та же «распознавалка» из shared/,
+// но данные выводятся из имени и размера файла.
+import { MAX_FILE_MB, recognizeTicket } from '../../shared/listingRules.js';
 
-export const MAX_FILE_MB = 10;
+export { MAX_FILE_MB };
+export { listingTitle, MIN_PRICE, priceError } from '../../shared/listingRules.js';
+
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 const ALLOWED_EXT = /\.(pdf|jpe?g|png|webp|heic|heif)$/i;
 
@@ -15,9 +17,8 @@ export const CHECK_STEPS = [
   'Ищем дубли на других площадках',
 ];
 
-// Зоны без мест — свободная рассадка
-const GENERAL_ADMISSION = new Set(['dance', 'fan']);
-
+// Быстрая проверка до загрузки — чтобы не гонять заведомо неподходящий файл по сети.
+// Окончательное решение принимает сервер.
 export function validateFile(file) {
   if (!file) return 'Файл не выбран';
   // iOS отдаёт HEIC с пустым type — тогда смотрим на расширение
@@ -37,37 +38,22 @@ function hash(str) {
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// onStep(i) вызывается перед каждым шагом — для анимации чек-листа
-export async function analyzeTicket(file, eventOffers, onStep) {
-  for (let i = 0; i < CHECK_STEPS.length; i++) {
-    onStep?.(i);
-    await delay(650 + (i % 2) * 300);
-  }
+// Анимация чек-листа «Проверка Tickety AI»: шаги идут параллельно с работой (work),
+// результат показывается, когда закончилось и то и другое.
+export async function runCheckAnimation(work, onStep) {
+  const animation = (async () => {
+    for (let i = 0; i < CHECK_STEPS.length; i++) {
+      onStep?.(i);
+      await delay(650 + (i % 2) * 300);
+    }
+  })();
+  const [result] = await Promise.all([work, animation]);
   onStep?.(CHECK_STEPS.length);
-
-  const h = hash(`${file.name}:${file.size}:${file.lastModified}`);
-  const zones = [...new Set(eventOffers.map((o) => o.zone))];
-  const zone = zones[h % zones.length];
-  // Номинал берём с лотов той же зоны — продавец его не редактирует (защита от накрутки)
-  const nominal = Math.max(...eventOffers.filter((o) => o.zone === zone).map((o) => o.nominal));
-  const seated = !GENERAL_ADMISSION.has(zone);
-
-  return {
-    zone,
-    zoneLabel: ZONES[zone],
-    seated,
-    sector: seated ? (zone === 'stands' ? `A${1 + (h % 12)}` : ZONES[zone]) : '',
-    row: seated ? String(1 + ((h >>> 4) % 25)) : '',
-    seat: seated ? String(1 + ((h >>> 9) % 40)) : '',
-    nominal,
-    barcode: String(h).padStart(10, '0').slice(-10),
-    fileKind: file.type === 'application/pdf' || /\.pdf$/i.test(file.name) ? 'PDF' : 'Фото билета',
-  };
+  return result;
 }
 
-// Заголовок лота так же, как у демо-лотов: «Сектор A4, Ряд 7, Место 18» или «Танцпол»
-export function listingTitle({ seated, zoneLabel, sector, row, seat }) {
-  if (!seated) return zoneLabel;
-  const prefix = sector && sector !== zoneLabel ? `Сектор ${sector}` : zoneLabel;
-  return [prefix, row && `Ряд ${row}`, seat && `Место ${seat}`].filter(Boolean).join(', ');
+// Локальный режим (сервер не настроен)
+export function analyzeTicketLocally(file, eventOffers) {
+  const fileKind = file.type === 'application/pdf' || /\.pdf$/i.test(file.name) ? 'PDF' : 'Фото билета';
+  return recognizeTicket(hash(`${file.name}:${file.size}:${file.lastModified}`), eventOffers, fileKind);
 }
