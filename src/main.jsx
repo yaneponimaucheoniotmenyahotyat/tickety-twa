@@ -3,10 +3,12 @@ import ReactDOM from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
 import App from './App';
 import { initTelegram, isTelegram } from './lib/telegram';
+import { startUpdateCheck } from './lib/updateCheck';
 import './index.css';
 
 // До первого рендера: тема применяется сразу, без мигания светлым фоном.
 initTelegram();
+startUpdateCheck();
 
 // Консоль на телефоне (шестерёнка в углу) — только в dev внутри Telegram или с ?eruda.
 // В production-сборку не попадает: ветка вырезается вместе с import.meta.env.DEV.
