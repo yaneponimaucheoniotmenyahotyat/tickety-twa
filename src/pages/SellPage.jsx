@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NEW_SELLER_ACTIVE_LIMIT } from '../../shared/listingRules.js';
-import { confirmPhone } from '@/data/accountStore';
+import { confirmPhone, loadAccount } from '@/data/accountStore';
 import { useServerAccount } from '@/hooks/useServerAccount';
 import { apiEnabled } from '@/lib/api';
 import Icon from '@/components/icons/Icon';
@@ -32,6 +32,9 @@ export default function SellPage() {
 
   // Допуск к продаже (только в режиме сервера — правила проверяет он же)
   const account = useServerAccount();
+  // Пока сервер не подтвердил аккаунт — продажу не открываем (fail closed):
+  // иначе при обрыве связи кнопка «Выставить билет» была бы доступна без проверки номера
+  const accountPending = apiEnabled && account.status !== 'ok';
   const needsPhone = account.status === 'ok' && !account.user.phoneVerified;
   const sold = listings.filter((l) => l.status === 'sold').length;
   const atLimit = apiEnabled && sold === 0 && active.length >= NEW_SELLER_ACTIVE_LIMIT;
@@ -68,7 +71,26 @@ export default function SellPage() {
               </li>
             ))}
           </ul>
-          {needsPhone ? (
+          {accountPending ? (
+            <div className="mt-5 rounded-2xl bg-fill/70 p-4 text-center">
+              {account.status === 'error' ? (
+                <>
+                  <p className="text-subhead font-semibold text-danger">Нет связи с сервером</p>
+                  <p className="mt-1 text-footnote text-label-secondary">
+                    {account.error.message}. Закройте Mini App полностью и откройте снова — или повторите.
+                  </p>
+                  <Button size="lg" block variant="plain" className="mt-3" onClick={loadAccount}>
+                    Повторить
+                  </Button>
+                </>
+              ) : (
+                <p className="flex items-center justify-center gap-2 text-subhead text-label-secondary">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Проверяем аккаунт…
+                </p>
+              )}
+            </div>
+          ) : needsPhone ? (
             // Защита от мошенников: продавать можно только с номером, подтверждённым Telegram
             <div className="mt-5 rounded-2xl bg-brand-soft/60 p-4">
               <p className="text-subhead font-semibold">Подтвердите номер телефона</p>

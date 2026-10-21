@@ -20,6 +20,7 @@ export const subscribeAccount = (l) => {
 
 export function loadAccount() {
   if (!apiEnabled) return Promise.resolve();
+  if (!loading && state.status !== 'loading') set({ status: 'loading' }); // «Повторить» после ошибки
   loading ??= getMe()
     .then((data) => set({ status: 'ok', user: data.user, isNew: data.isNew }))
     .catch((error) => set({ status: 'error', error }))
