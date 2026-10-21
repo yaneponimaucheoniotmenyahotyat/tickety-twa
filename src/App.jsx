@@ -8,6 +8,7 @@ import EventPage from './pages/EventPage';
 import CheckoutPage from './pages/CheckoutPage';
 import TicketsPage from './pages/TicketsPage';
 import TicketPage from './pages/TicketPage';
+import ProfilePage from './pages/ProfilePage';
 
 // Разделы вне MVP — заглушки, чтобы таб-бар был живым
 const Placeholder = ({ title }) => (
@@ -38,7 +39,7 @@ export default function App() {
         <Route path="/tickets" element={<TicketsPage />} />
         <Route path="/tickets/:id" element={<TicketPage />} />
         <Route path="/sell" element={<Placeholder title="Продать" />} />
-        <Route path="/profile" element={<Placeholder title="Профиль" />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {withTabBar && <TabBar />}

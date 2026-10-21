@@ -18,16 +18,19 @@ function read() {
 let purchased = read();
 let all = [...purchased, ...DEMO_TICKETS];
 
-export function addTicket(ticket) {
-  purchased = [ticket, ...purchased];
+function save(next) {
+  purchased = next;
   all = [...purchased, ...DEMO_TICKETS];
   try {
     localStorage.setItem(KEY, JSON.stringify(purchased));
   } catch {
-    /* хранилище недоступно — билет живёт до перезагрузки */
+    /* хранилище недоступно — билеты живут до перезагрузки */
   }
   listeners.forEach((l) => l());
 }
+
+export const addTicket = (ticket) => save([ticket, ...purchased]);
+export const clearTickets = () => save([]);
 
 const subscribe = (l) => {
   listeners.add(l);

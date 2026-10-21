@@ -16,10 +16,8 @@ function read() {
 
 let favorites = read();
 
-export function toggleFavorite(id) {
-  favorites = new Set(favorites);
-  if (favorites.has(id)) favorites.delete(id);
-  else favorites.add(id);
+function save(next) {
+  favorites = next;
   try {
     localStorage.setItem(KEY, JSON.stringify([...favorites]));
   } catch {
@@ -28,9 +26,19 @@ export function toggleFavorite(id) {
   listeners.forEach((l) => l());
 }
 
+export function toggleFavorite(id) {
+  const next = new Set(favorites);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  save(next);
+}
+
+export const clearFavorites = () => save(new Set());
+
 const subscribe = (l) => {
   listeners.add(l);
   return () => listeners.delete(l);
 };
 
 export const useIsFavorite = (id) => useSyncExternalStore(subscribe, () => favorites.has(id));
+export const useFavorites = () => useSyncExternalStore(subscribe, () => favorites);

@@ -2,6 +2,11 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import svgr from 'vite-plugin-svgr';
 import { fileURLToPath, URL } from 'node:url';
+import { readFileSync } from 'node:fs';
+
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+// В GitHub Actions доступен SHA коммита — по нему видно, какая сборка открыта на телефоне
+const commit = (process.env.GITHUB_SHA || 'local').slice(0, 7);
 
 // SVGO: чистим метаданные Figma, сохраняем viewBox, размер — через className.
 const svgo = (extraPlugins = []) => ({
@@ -35,6 +40,10 @@ const TUNNEL_HOSTS = ['.lhr.life', '.trycloudflare.com'];
 // HMR-сокет идёт через тот же туннель (wss, порт 443), а не на :5173.
 export default defineConfig(({ mode }) => ({
   base: './', // TWA часто хостится не в корне домена
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+    __APP_COMMIT__: JSON.stringify(commit),
+  },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

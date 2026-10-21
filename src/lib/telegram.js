@@ -90,3 +90,21 @@ export function openLink(url) {
 export function getUser() {
   return tg?.initDataUnsafe?.user ?? null;
 }
+
+// Нативный диалог подтверждения Telegram; в браузере — window.confirm
+export function confirmDialog(message) {
+  if (isTelegram && supports('6.2')) {
+    return new Promise((resolve) => tg.showConfirm(message, resolve));
+  }
+  return Promise.resolve(window.confirm(message));
+}
+
+// Разрешение боту писать пользователю (уведомления о билетах), Bot API 6.9+.
+// Вне Telegram разрешать некому — возвращаем false.
+export function requestWriteAccess() {
+  if (!isTelegram || !supports('6.9')) return Promise.resolve(false);
+  return new Promise((resolve) => tg.requestWriteAccess((granted) => resolve(Boolean(granted))));
+}
+
+// Пользователь уже разрешил писать при старте (например, открыл Mini App из чата с ботом)
+export const writeAccessPreGranted = () => Boolean(tg?.initDataUnsafe?.user?.allows_write_to_pm);

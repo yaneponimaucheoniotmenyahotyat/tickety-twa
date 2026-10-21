@@ -1,3 +1,5 @@
+import { getOffer } from '@/data/mockData';
+
 // Модель купленного билета и жизненный цикл эскроу-сделки.
 // Билет хранит снимок события: история покупок не ломается, если событие снимут с продажи.
 
@@ -42,11 +44,19 @@ export function createTicket({ event, offer, total, method }) {
     delivery: offer.delivery,
     quantity: offer.quantity,
     price: offer.price,
+    nominal: offer.nominal,
     total,
     method,
     seller: offer.seller.name,
     purchasedAt: Date.now(),
   };
+}
+
+// Экономия относительно номинала. У билетов, купленных до появления поля nominal,
+// номинал берём из исходного лота.
+export function ticketSavings(t) {
+  const nominal = t.nominal ?? getOffer(t.offerId)?.nominal;
+  return nominal ? Math.max(0, nominal - t.price) * t.quantity : 0;
 }
 
 // Содержимое QR: код билета + номер 30-секундного окна (сервер проверяет оба)
@@ -74,6 +84,7 @@ export const DEMO_TICKETS = [
     delivery: 'Apple Wallet + PDF',
     quantity: 1,
     price: 5200,
+    nominal: 5500,
     total: 5200,
     method: 'sbp',
     seller: 'Мария С.',
