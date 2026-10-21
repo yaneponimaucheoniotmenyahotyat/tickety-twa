@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.claude/
+*.log
+.DS_Store
+Thumbs.db
+# Временные файлы Windows/браузера, которые однажды уже роняли Vite
+*.url
+*.crdownload
+*.tmp
+.env
+.env.*

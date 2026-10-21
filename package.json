@@ -1,0 +1,30 @@
+{
+  "name": "tickety-twa",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:tunnel": "vite --mode tunnel",
+    "tunnel": "ssh -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -R 80:127.0.0.1:5173 nokey@localhost.run",
+    "tunnel:cf": "cloudflared tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:5173",
+    "build": "vite build",
+    "preview": "vite preview",
+    "phone": "vite build && vite preview"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.30.6"
+  },
+  "devDependencies": {
+    "@svgr/plugin-svgo": "8.1.0",
+    "@vitejs/plugin-react": "4.3.4",
+    "autoprefixer": "10.4.20",
+    "eruda": "3.4.3",
+    "postcss": "8.5.29",
+    "tailwindcss": "3.4.17",
+    "vite": "6.4.4",
+    "vite-plugin-svgr": "4.3.0"
+  }
+}

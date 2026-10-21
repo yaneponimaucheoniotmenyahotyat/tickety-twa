@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Токены в формате "R G B". Значения ниже — fallback для браузера (вне Telegram).
+ * В Telegram их перезаписывает applyTheme() из src/lib/telegram.js по webApp.themeParams.
+ */
+@layer base {
+  :root {
+    --app-bg: 242 242 247;
+    --app-surface: 255 255 255;
+    --app-fill: 236 236 241;
+    --app-separator: 229 229 234;
+    --app-label: 17 17 17;
+    --app-label-2: 65 71 85;
+    --app-label-3: 113 119 134;
+    --app-brand: 0 88 188;
+    --app-brand-soft: 216 226 255;
+    --app-brand-ink: 0 68 147;
+    --app-success: 0 110 40;
+    --app-success-soft: 232 248 238;
+    --app-success-ink: 0 33 7;
+
+    /* Безопасные зоны: системная + шапка Telegram в fullscreen (Bot API 8.0+) */
+    --app-safe-top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    --app-safe-bottom: calc(
+      max(var(--tg-safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)) +
+        var(--tg-content-safe-area-inset-bottom, 0px)
+    );
+
+    color-scheme: light;
+  }
+
+  .dark {
+    --app-bg: 0 0 0;
+    --app-surface: 28 28 30;
+    --app-fill: 44 44 46;
+    --app-separator: 56 56 58;
+    --app-label: 255 255 255;
+    --app-label-2: 174 174 178;
+    --app-label-3: 142 142 147;
+    --app-brand: 77 148 255;
+    --app-brand-soft: 24 45 82;
+    --app-brand-ink: 173 198 255;
+    --app-success: 52 199 89;
+    --app-success-soft: 16 48 28;
+    --app-success-ink: 190 255 200;
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-bg font-sans text-body text-label antialiased;
+    /* Высота вьюпорта Telegram; 100vh в WebView прыгает при раскрытии */
+    min-height: var(--tg-viewport-stable-height, 100vh);
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none; /* без «резинки» body — не тянем за собой WebView */
+    user-select: none;
+  }
+
+  input,
+  textarea {
+    user-select: text;
+  }
+}
+
+@layer components {
+  /* Карточка iOS inset-grouped */
+  .card {
+    @apply rounded-2.5xl bg-surface shadow-card;
+  }
+
+  /* Нажатие как у UIButton: лёгкое затемнение + сжатие */
+  .pressable {
+    @apply transition-[transform,opacity] duration-150 ease-ios active:scale-[0.97] active:opacity-80;
+  }
+
+  /*
+   * Скролл внутри шторки. pan-y отдаёт браузеру только вертикальный жест,
+   * contain не даёт докрутке «провалиться» в Telegram и закрыть Mini App.
+   */
+  .sheet-scroll {
+    overflow-y: auto;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Горизонтальные ленты чипсов (фильтры, категории) */
+  .chips-scroll {
+    @apply flex gap-2 overflow-x-auto;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .chips-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /*
+   * Двойной слайдер цены: два input[type=range] друг над другом.
+   * Сам трек «прозрачен» для касаний, ловят только ползунки.
+   */
+  .dual-range {
+    @apply pointer-events-none absolute inset-0 m-0 h-7 w-full appearance-none bg-transparent;
+  }
+  .dual-range::-webkit-slider-thumb {
+    @apply pointer-events-auto h-7 w-7 cursor-grab appearance-none rounded-full;
+    background: radial-gradient(circle, rgb(var(--app-brand)) 0 5px, #fff 5.5px);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.18), 0 0 0 0.5px rgb(0 0 0 / 0.04);
+  }
+  .dual-range::-moz-range-thumb {
+    @apply pointer-events-auto h-7 w-7 cursor-grab rounded-full border-0;
+    background: radial-gradient(circle, rgb(var(--app-brand)) 0 5px, #fff 5.5px);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
+  }
+}

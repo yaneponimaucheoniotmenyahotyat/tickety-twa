@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="format-detection" content="telephone=no" />
+    <title>Tickety</title>
+    <!-- Официальный скрипт Telegram: создаёт window.Telegram.WebApp и CSS-переменные --tg-theme-* -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <!-- Заставка до загрузки JS: React заменит содержимое #root при первом рендере -->
+    <div id="root">
+      <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-family:-apple-system,system-ui,sans-serif;background:var(--tg-theme-secondary-bg-color,#f2f2f7);color:var(--tg-theme-hint-color,#717786)">
+        <div style="font-size:28px;font-weight:700;color:var(--tg-theme-text-color,#111)">Tickety</div>
+        <div style="width:28px;height:28px;border-radius:50%;border:3px solid #0058bc;border-top-color:transparent;animation:boot-spin .8s linear infinite"></div>
+        <style>@keyframes boot-spin{to{transform:rotate(360deg)}}</style>
+      </div>
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
