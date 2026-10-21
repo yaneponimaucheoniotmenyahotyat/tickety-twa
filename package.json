@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:tunnel": "vite --mode tunnel",
     "tunnel": "ssh -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -R 80:127.0.0.1:5173 nokey@localhost.run",
+    "tunnel:bot": "node --env-file=server/.env scripts/tunnel-bot.mjs",
     "tunnel:cf": "cloudflared tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:5173",
     "build": "vite build",
     "preview": "vite preview",
