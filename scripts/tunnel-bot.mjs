@@ -35,7 +35,8 @@ let current = null;
 
 const ssh = spawn(
   'ssh',
-  ['-o', 'StrictHostKeyChecking=accept-new', '-o', 'ServerAliveInterval=30', '-o', 'BatchMode=yes',
+  // -C — сжатие внутри туннеля: бесплатный localhost.run медленный, а JS сжимается в ~3 раза
+  ['-C', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ServerAliveInterval=30', '-o', 'BatchMode=yes',
     '-R', `80:127.0.0.1:${PORT}`, 'nokey@localhost.run'],
   { stdio: ['ignore', 'pipe', 'pipe'] },
 );
