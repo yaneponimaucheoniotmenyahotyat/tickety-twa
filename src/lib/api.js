@@ -72,6 +72,26 @@ export const adminSupportThread = (id) => api(`/api/admin/support/${id}`);
 export const adminSupportReply = (id, body) => api(`/api/admin/support/${id}/messages`, { method: 'POST', body: { body } });
 export const adminSupportClose = (id) => api(`/api/admin/support/${id}/close`, { method: 'POST' });
 
+export const adminOrders = (status = 'disputed') => api(`/api/admin/orders?status=${status}`);
+export const adminRefundOrder = (id, reason) => api(`/api/admin/orders/${id}/refund`, { method: 'POST', body: { reason } });
+export const adminReleaseOrder = (id, reason) => api(`/api/admin/orders/${id}/release`, { method: 'POST', body: { reason } });
+
+// ---- Покупки и кошелёк ----
+export const fetchConfig = () => api('/api/config');
+export const createOrder = (listingId) => api('/api/orders', { method: 'POST', body: { listingId } });
+export const payOrder = (id) => api(`/api/orders/${id}/pay`, { method: 'POST', body: { method: 'test' } });
+export const cancelOrder = (id) => api(`/api/orders/${id}/cancel`, { method: 'POST' });
+export const fetchOrders = () => api('/api/orders');
+export const fetchOrder = (id) => api(`/api/orders/${id}`);
+export const confirmOrder = (id) => api(`/api/orders/${id}/confirm`, { method: 'POST' });
+export const disputeOrder = (id, reason) => api(`/api/orders/${id}/dispute`, { method: 'POST', body: { reason } });
+export const ticketLink = (id) => api(`/api/orders/${id}/ticket-link`, { method: 'POST' });
+export const fetchWallet = () => api('/api/wallet');
+export const requestPayout = (amount) => api('/api/wallet/payouts', { method: 'POST', body: { amount } });
+
+// Полный адрес для ссылки, которую открывает Telegram (браузер без нашего заголовка авторизации)
+export const absoluteApiUrl = (path) => `${BASE || window.location.origin}${path}`;
+
 // ---- Поддержка ----
 export const supportThreads = () => api('/api/support/threads');
 export const supportThread = (id) => api(`/api/support/threads/${id}`);

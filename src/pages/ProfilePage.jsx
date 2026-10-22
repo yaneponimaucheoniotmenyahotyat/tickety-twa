@@ -247,6 +247,15 @@ export default function ProfilePage() {
           )}
           {account.status === 'ok' && (
             <ListRow
+              icon="card"
+              iconClass="bg-success-soft text-success"
+              title="Кошелёк"
+              subtitle="Деньги за проданные билеты"
+              onClick={() => navigate('/wallet')}
+            />
+          )}
+          {account.status === 'ok' && (
+            <ListRow
               icon="shield-heart"
               iconClass="bg-brand-soft text-brand"
               title="Поддержка"

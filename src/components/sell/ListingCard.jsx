@@ -8,6 +8,7 @@ import { confirmDialog, haptic } from '@/lib/telegram';
 
 const STATUS = {
   active: { label: 'В продаже', tone: 'success' },
+  reserved: { label: 'Бронь', tone: 'brand' },
   sold: { label: 'Продано', tone: 'success' },
   withdrawn: { label: 'Снято', tone: 'neutral' },
   removed: { label: 'Снято модератором', tone: 'danger' },
@@ -16,6 +17,8 @@ const STATUS = {
 export default function ListingCard({ listing, event: found }) {
   const navigate = useNavigate();
   const active = listing.status === 'active';
+  // Проданные и забронированные — не «погасшие»: это хорошие новости для продавца
+  const live = active || listing.status === 'reserved' || listing.status === 'sold';
   const status = STATUS[listing.status] ?? STATUS.withdrawn;
   const event = found ?? { id: listing.eventId, title: 'Событие недоступно', date: null, cover: COVERS[0] };
 
@@ -32,9 +35,9 @@ export default function ListingCard({ listing, event: found }) {
   };
 
   return (
-    <article className={`card p-4 ${active ? '' : 'opacity-60'}`}>
+    <article className={`card p-4 ${live ? '' : 'opacity-60'}`}>
       <div className="flex gap-3">
-        <EventCover event={event} className={`h-14 w-14 shrink-0 rounded-xl ${active ? '' : 'grayscale'}`} />
+        <EventCover event={event} className={`h-14 w-14 shrink-0 rounded-xl ${live ? '' : 'grayscale'}`} />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p className="truncate text-headline">{event.title}</p>
@@ -53,6 +56,16 @@ export default function ListingCard({ listing, event: found }) {
           </p>
         </div>
       </div>
+      {listing.sale && (
+        <p className="mt-3 rounded-xl bg-fill px-3 py-2 text-footnote">
+          {listing.sale.status === 'pending' && 'Покупатель оплачивает билет — бронь на 15 минут'}
+          {listing.sale.status === 'paid' &&
+            `${formatPrice(listing.sale.amount)} удерживаются до ${formatEventDate(listing.sale.holdUntil)}, потом — в кошелёк`}
+          {listing.sale.status === 'disputed' && 'Покупатель открыл спор — деньги заморожены, команда Tickety разбирается'}
+          {listing.sale.status === 'completed' && `${formatPrice(listing.sale.amount)} зачислены в кошелёк`}
+          {listing.sale.status === 'refunded' && 'Деньги возвращены покупателю'}
+        </p>
+      )}
       {listing.removedReason && (
         <p className="mt-3 rounded-xl bg-danger-soft px-3 py-2 text-footnote text-danger">
           Причина: {listing.removedReason}

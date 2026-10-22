@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import Icon from '@/components/icons/Icon';
 import TopBar, { BackLink } from '@/components/layout/TopBar';
+import BetaCheckout from '@/components/checkout/BetaCheckout';
 import EscrowGuarantee from '@/components/checkout/EscrowGuarantee';
 import OrderSummary from '@/components/checkout/OrderSummary';
 import PaymentMethodItem from '@/components/checkout/PaymentMethodItem';
@@ -14,7 +14,7 @@ import { useCountdown } from '@/hooks/useCountdown';
 import { addTicket } from '@/hooks/useTickets';
 import PageLoader from '@/components/ui/PageLoader';
 import { useEventsState } from '@/hooks/useEvents';
-import { useListingOffers } from '@/hooks/useListings';
+import { useListingOffers, useListingsLoaded } from '@/hooks/useListings';
 import { formatPrice } from '@/lib/format';
 import { createTicket } from '@/lib/tickets';
 import { haptic, setClosingConfirmation } from '@/lib/telegram';
@@ -26,7 +26,12 @@ export default function CheckoutPage() {
   const navigate = useNavigate();
   const catalog = useEventsState(); // перерисовка, когда каталог пришёл с сервера
   useListingOffers();
-  const offer = getOffer(offerId);
+  const listingsLoaded = useListingsLoaded();
+  // После оплаты объявление уходит с витрины — запоминаем то, с которым открыли страницу,
+  // иначе экран «Оплачено» не успел бы показаться
+  const seen = useRef(null);
+  const offer = getOffer(offerId) ?? seen.current;
+  if (offer) seen.current = offer;
   const event = offer && getEvent(offer.eventId);
 
   const [method, setMethod] = useState('sbp');
@@ -48,34 +53,14 @@ export default function CheckoutPage() {
   const payTimer = useRef();
   useEffect(() => () => clearTimeout(payTimer.current), []);
 
-  if (catalog.status === 'loading' && !event) return <PageLoader />;
+  // Прямая ссылка или перезагрузка: каталог и объявления ещё грузятся — не уходим на главную раньше времени
+  if (!event && (catalog.status === 'loading' || !listingsLoaded)) return <PageLoader />;
   if (!offer || !event) return <Navigate to="/" replace />;
   // Свой билет купить нельзя (прямой переход по ссылке /checkout/<id своего объявления>)
   if (offer.own) return <Navigate to={`/event/${event.id}`} replace />;
 
-  // Бета: оплата через Tickety ещё не подключена — не изображаем её на настоящих объявлениях
-  if (!DEMO_MODE) {
-    return (
-      <>
-        <TopBar title="Покупка" left={<BackLink />} />
-        <main className="px-gutter pt-6">
-          <section className="card flex flex-col items-center px-6 py-8 text-center">
-            <span className="grid h-14 w-14 place-items-center rounded-full bg-brand-soft text-brand">
-              <Icon name="lock" className="h-7 w-7" />
-            </span>
-            <h1 className="mt-4 text-title3">Оплата скоро появится</h1>
-            <p className="mt-2 text-subhead text-label-secondary">
-              Сейчас идёт закрытая бета: покупка через Tickety с удержанием денег до прохода на событие ещё
-              не подключена. Мы не будем принимать оплату, пока не сможем её защитить.
-            </p>
-            <Button className="mt-5" variant="plain" onClick={() => navigate(`/event/${event.id}`, { replace: true })}>
-              Вернуться к событию
-            </Button>
-          </section>
-        </main>
-      </>
-    );
-  }
+  // Бета: тестовая оплата через сервер с настоящим удержанием и спорами
+  if (!DEMO_MODE) return <BetaCheckout event={event} offer={offer} />;
 
   const subtotal = offer.price * offer.quantity;
   const fee = Math.round((subtotal * SERVICE_FEE_PERCENT) / 100);

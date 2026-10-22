@@ -7,9 +7,27 @@ import Button from '@/components/ui/Button';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { useNow } from '@/hooks/useNow';
 import { useTickets } from '@/hooks/useTickets';
+import { DEMO_MODE } from '@/data/mockData';
 import { ticketStatus } from '@/lib/tickets';
+import { OrdersList } from './OrdersPage';
+
+// Бета (с сервером): настоящие покупки с удержанием денег
+function BetaTicketsPage() {
+  return (
+    <>
+      <TopBar title="Мои билеты" />
+      <main className="px-gutter pb-6 pt-3">
+        <OrdersList />
+      </main>
+    </>
+  );
+}
 
 export default function TicketsPage() {
+  return DEMO_MODE ? <DemoTicketsPage /> : <BetaTicketsPage />;
+}
+
+function DemoTicketsPage() {
   const navigate = useNavigate();
   const tickets = useTickets();
   const now = useNow(5000); // статус «Переоформление → Готов» меняется со временем

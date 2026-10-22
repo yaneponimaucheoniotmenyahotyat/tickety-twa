@@ -103,7 +103,8 @@ export default defineConfig(({ mode }) => ({
     hmr: mode === 'tunnel' ? { protocol: 'wss', clientPort: 443 } : undefined,
     // Временные файлы браузера/Windows в папке проекта бывают заблокированы (EBUSY)
     // и роняют наблюдатель — их не отслеживаем.
-    watch: { ignored: ['**/*.url', '**/*.crdownload', '**/*.tmp', '**/*.partial'] },
+    // + база и снимки сервера: наблюдатель держит папки открытыми, и Windows не даёт их переименовать
+    watch: { ignored: ['**/*.url', '**/*.crdownload', '**/*.tmp', '**/*.partial', '**/server/.data*/**', '**/server/.backups/**'] },
     proxy: API_PROXY,
   },
   preview: {

@@ -28,6 +28,8 @@ let local = apiEnabled ? [] : read();
 let remoteActive = [];
 let remoteMine = [];
 let loadError = null;
+// Первая загрузка с сервера завершилась (успешно или нет) — до неё «объявления нет» не значит «его нет»
+let loaded = !apiEnabled;
 
 let mine = apiEnabled ? remoteMine : local;
 let active = apiEnabled ? remoteActive : local.filter((l) => l.status === 'active');
@@ -52,6 +54,7 @@ export const getListings = () => mine;
 // Активные объявления в формате лота — их видит витрина и страница события
 export const getListingOffers = () => active;
 export const getListingsError = () => loadError;
+export const getListingsLoaded = () => loaded;
 
 // Подтянуть объявления с сервера (при старте и при открытии «Продать»)
 export async function refreshListings() {
@@ -68,6 +71,7 @@ export async function refreshListings() {
   } catch (e) {
     loadError = e.message;
   }
+  loaded = true;
   emit();
 }
 

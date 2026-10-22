@@ -81,7 +81,7 @@ export default function OfferCard({ offer }) {
           </Button>
         ) : (
           <Button icon="bolt" onClick={buy}>
-            Купить через СБП
+            {apiEnabled ? 'Купить' : 'Купить через СБП'}
           </Button>
         )}
       </div>

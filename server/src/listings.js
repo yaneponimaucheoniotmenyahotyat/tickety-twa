@@ -89,10 +89,25 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
     return { listings: rows.map((r) => toOffer(r, req.user?.id)) };
   });
 
-  // Мои объявления, включая снятые
+  // Мои объявления, включая снятые; у забронированных и проданных — состояние сделки
   app.get('/api/me/listings', { preHandler: requireUser }, async (req) => {
     const rows = await db.query(`${LISTING_SELECT} WHERE l.seller_id = $1 ORDER BY l.created_at DESC`, [req.user.id]);
-    return { listings: rows.map((r) => toOffer(r, req.user.id)) };
+    const sales = await db.query(
+      `SELECT listing_id, status, amount, fee, hold_until, expires_at FROM orders
+       WHERE seller_id = $1 AND status IN ('pending', 'paid', 'disputed', 'completed', 'refunded')`,
+      [req.user.id],
+    );
+    return {
+      listings: rows.map((r) => {
+        const sale = sales.find((s) => s.listing_id === r.id);
+        return {
+          ...toOffer(r, req.user.id),
+          sale: sale
+            ? { status: sale.status, amount: sale.amount - sale.fee, holdUntil: sale.hold_until, expiresAt: sale.expires_at }
+            : null,
+        };
+      }),
+    };
   });
 
   // Шаг «Загрузите билет»: multipart с полями eventId и file
@@ -134,14 +149,14 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
     const hash = sha256(buf);
     const [dup] = await db.query(
       `SELECT l.seller_id FROM listings l
-       WHERE l.status = 'active'
+       WHERE l.status IN ('active', 'reserved', 'sold') -- проданный билет второй раз не выставить
          AND (l.file_sha256 = $1 OR EXISTS (SELECT 1 FROM listing_codes c WHERE c.listing_id = l.id AND c.code_hash = ANY($2)))
        LIMIT 1`,
       [hash, codeHashes],
     );
     if (dup) {
       const mine = Number(dup.seller_id) === Number(req.user.id);
-      throw new HttpError(409, 'duplicate', mine ? 'Вы уже продаёте этот билет' : 'Этот билет уже продаётся на Tickety');
+      throw new HttpError(409, 'duplicate', mine ? 'Вы уже продаёте или продали этот билет' : 'Этот билет уже продаётся или продан на Tickety');
     }
 
     const [check] = await db.query(

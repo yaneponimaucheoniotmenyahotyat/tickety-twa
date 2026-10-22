@@ -31,7 +31,8 @@ export default function SellPage() {
     refreshListings();
   }, []);
   const active = listings.filter((l) => l.status === 'active');
-  const archived = listings.filter((l) => l.status !== 'active');
+  const sold = listings.filter((l) => l.status === 'reserved' || l.status === 'sold');
+  const archived = listings.filter((l) => !['active', 'reserved', 'sold'].includes(l.status));
 
   // Допуск к продаже (только в режиме сервера — правила проверяет он же)
   const account = useServerAccount();
@@ -40,8 +41,8 @@ export default function SellPage() {
   const accountPending = apiEnabled && account.status !== 'ok';
   const blocked = account.status === 'ok' && account.user.blocked;
   const needsPhone = account.status === 'ok' && !account.user.phoneVerified;
-  const sold = listings.filter((l) => l.status === 'sold').length;
-  const atLimit = apiEnabled && sold === 0 && active.length >= NEW_SELLER_ACTIVE_LIMIT;
+  const soldCount = listings.filter((l) => l.status === 'sold').length;
+  const atLimit = apiEnabled && soldCount === 0 && active.length >= NEW_SELLER_ACTIVE_LIMIT;
   const [phoneBusy, setPhoneBusy] = useState(false);
   const [phoneError, setPhoneError] = useState(null);
   const onConfirmPhone = async () => {
@@ -141,6 +142,17 @@ export default function SellPage() {
               В продаже ({active.length})
             </h2>
             {active.map((l) => (
+              <ListingCard key={l.id} listing={l} event={getEvent(l.eventId)} />
+            ))}
+          </>
+        )}
+
+        {sold.length > 0 && (
+          <>
+            <h2 className="px-4 pt-3 text-footnote font-medium uppercase tracking-wide text-label-secondary">
+              Продано и бронь
+            </h2>
+            {sold.map((l) => (
               <ListingCard key={l.id} listing={l} event={getEvent(l.eventId)} />
             ))}
           </>

@@ -10,6 +10,7 @@
     "dev": "node --watch --env-file-if-exists=.env src/index.js",
     "public": "node --env-file-if-exists=.env src/public.js",
     "start": "node src/index.js",
+    "stop": "node --env-file-if-exists=.env scripts/stop.js",
     "test-tickets": "node scripts/make-test-tickets.js",
     "seed:demo": "node --env-file-if-exists=.env scripts/seed-demo.js",
     "test": "node --test"

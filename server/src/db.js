@@ -43,6 +43,8 @@ export async function openDb({ databaseUrl, dataDir } = {}) {
       await lite.exec(sql);
     },
     tx: (fn) => lite.transaction((t) => fn({ query: async (sql, params) => (await t.query(sql, params)).rows })),
+    // Снимок всей базы (tar.gz). Восстановление: new PGlite({ loadDataDir: <файл> })
+    dump: async () => Buffer.from(await (await lite.dumpDataDir('gzip')).arrayBuffer()),
     close: () => lite.close(),
   };
 }

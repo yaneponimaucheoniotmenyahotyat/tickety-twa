@@ -18,6 +18,9 @@ import {
   adminDeleteEvent,
   adminEvents,
   adminListings,
+  adminOrders,
+  adminRefundOrder,
+  adminReleaseOrder,
   adminPublishEvent,
   adminRemoveListing,
   adminRemoveStaff,
@@ -292,6 +295,140 @@ function SupportTab() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ---- Сделки и споры ----
+const DEAL_STATUS = {
+  disputed: { label: 'Спор', tone: 'danger' },
+  paid: { label: 'Удерживается', tone: 'brand' },
+  completed: { label: 'Продавцу', tone: 'success' },
+  refunded: { label: 'Возврат', tone: 'neutral' },
+};
+
+function DealsTab() {
+  const [status, setStatus] = useState('disputed');
+  const [state, reload] = useLoad(() => adminOrders(status), [status]);
+  const [action, setAction] = useState(null); // { type: refund | release, order }
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const orders = state.status === 'ok' ? state.data.orders : [];
+
+  const open = (type, order) => {
+    setAction({ type, order });
+    setReason('');
+    setError(null);
+  };
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (action.type === 'refund') await adminRefundOrder(action.order.id, reason.trim());
+      else await adminReleaseOrder(action.order.id, reason.trim());
+      haptic('success');
+      setAction(null);
+      reload();
+    } catch (e) {
+      haptic('error');
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const person = (p) => (
+    <button
+      type="button"
+      onClick={() => p.username && openTelegramLink(`https://t.me/${p.username}`)}
+      className={p.username ? 'font-semibold text-brand' : 'font-semibold'}
+    >
+      {p.name}
+    </button>
+  );
+
+  return (
+    <div className="space-y-3">
+      <SegmentedControl
+        dense
+        value={status}
+        onChange={setStatus}
+        options={Object.entries(DEAL_STATUS).map(([value, s]) => ({ value, label: s.label }))}
+      />
+      {state.status === 'loading' && <PageLoader />}
+      {state.status === 'error' && <p className="text-center text-subhead text-danger">{state.error.message}</p>}
+      {state.status === 'ok' && orders.length === 0 && (
+        <p className="px-4 py-6 text-center text-subhead text-label-secondary">Пусто</p>
+      )}
+      {orders.map((o) => (
+        <article key={o.id} className="card p-4">
+          <div className="flex items-start justify-between gap-2">
+            <p className="min-w-0 truncate text-footnote text-label-secondary">{o.event.title}</p>
+            <Badge size="sm" tone={DEAL_STATUS[o.status].tone}>
+              {DEAL_STATUS[o.status].label}
+            </Badge>
+          </div>
+          <p className="text-headline">{o.title}</p>
+          <p className="text-subhead">
+            <b>{formatPrice(o.amount)}</b>
+            <span className="text-label-secondary">
+              {' '}
+              • {o.provider === 'test' ? 'тест' : o.provider} • удержание до {formatEventDate(o.holdUntil)}
+            </span>
+          </p>
+          <p className="mt-1 text-footnote text-label-secondary">
+            Покупатель {person(o.buyer)} (ID {o.buyer.id}) • продавец {person(o.seller)} (ID {o.seller.id})
+          </p>
+          {o.disputeReason && <p className="mt-2 rounded-xl bg-danger-soft px-3 py-2 text-footnote text-danger">Спор: {o.disputeReason}</p>}
+          {o.resolution && o.status !== 'paid' && o.status !== 'disputed' && (
+            <p className="mt-2 text-footnote text-label-secondary">Итог: {o.resolution}</p>
+          )}
+          {(o.status === 'paid' || o.status === 'disputed') && (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => open('refund', o)} className="pressable h-9 rounded-xl bg-danger-soft text-footnote font-semibold text-danger">
+                Вернуть покупателю
+              </button>
+              <button type="button" onClick={() => open('release', o)} className="pressable h-9 rounded-xl bg-fill text-footnote font-semibold">
+                Отдать продавцу
+              </button>
+            </div>
+          )}
+        </article>
+      ))}
+
+      <BottomSheet
+        open={Boolean(action)}
+        onClose={() => setAction(null)}
+        header={
+          action && (
+            <div>
+              <h2 className="text-title3">{action.type === 'refund' ? 'Вернуть деньги покупателю' : 'Отдать деньги продавцу'}</h2>
+              <p className="text-footnote text-label-secondary">
+                {formatPrice(action.order.amount)} • {action.order.title}
+                {action.type === 'refund' ? ' • объявление снимется с продажи' : ''}
+              </p>
+            </div>
+          )
+        }
+        footer={
+          <div>
+            {error && <p className="mb-2 text-center text-footnote text-danger">{error}</p>}
+            <Button size="lg" block loading={busy} disabled={reason.trim().length < 3} onClick={submit}>
+              {action?.type === 'refund' ? 'Вернуть деньги' : 'Отдать продавцу'}
+            </Button>
+          </div>
+        }
+      >
+        <p className="mb-2 text-footnote text-label-secondary">Решение и причину увидят покупатель и продавец</p>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value.slice(0, 500))}
+          placeholder={action?.type === 'refund' ? 'Например: билет недействителен, продавец не ответил' : 'Например: проход подтверждён'}
+          rows={3}
+          className="w-full rounded-xl bg-fill px-3 py-2 text-body outline-none"
+        />
+      </BottomSheet>
     </div>
   );
 }
@@ -600,6 +737,7 @@ function ListingsTab() {
 const TABS = [
   { value: 'events', label: 'События', can: (p) => p.includes('events'), Tab: EventsTab },
   { value: 'listings', label: 'Модерация', can: (p) => p.includes('moderation'), Tab: ListingsTab },
+  { value: 'deals', label: 'Сделки', can: (p) => p.includes('moderation'), Tab: DealsTab },
   { value: 'support', label: 'Обращения', can: (p) => p.includes('support') || p.includes('moderation'), Tab: SupportTab },
   { value: 'team', label: 'Команда', can: (p) => p.includes('team'), Tab: TeamTab },
 ];
@@ -621,13 +759,15 @@ export default function AdminPage() {
       <TopBar title="Админка" left={<BackLink label="Профиль" />} />
       <main className="space-y-3 px-gutter pb-6 pt-3">
         <AdminGate account={account}>
+          {/* Вкладок до пяти — лента прокручивается, а не сжимается в нечитаемое */}
           {tabs.length > 1 && (
-            <SegmentedControl
-              dense
-              value={tab.value}
-              onChange={(t) => setParams({ tab: t }, { replace: true })}
-              options={tabs.map(({ value, label }) => ({ value, label }))}
-            />
+            <div className="chips-scroll -mx-gutter px-gutter">
+              {tabs.map((t) => (
+                <Chip key={t.value} active={tab.value === t.value} onClick={() => setParams({ tab: t.value }, { replace: true })}>
+                  {t.label}
+                </Chip>
+              ))}
+            </div>
           )}
           {tab && <tab.Tab />}
         </AdminGate>

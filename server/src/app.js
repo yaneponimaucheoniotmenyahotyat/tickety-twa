@@ -6,6 +6,7 @@ import { HttpError } from './errors.js';
 import { registerEventRoutes } from './events.js';
 import { registerListingRoutes } from './listings.js';
 import { createNotifier } from './notify.js';
+import { registerOrderRoutes } from './orders.js';
 import { accessOf, registerStaffRoutes } from './staff.js';
 import { registerSupportRoutes } from './support.js';
 import { AuthError, validateContact, validateInitData } from './telegramAuth.js';
@@ -183,6 +184,8 @@ export async function buildApp({ config, db, logger = false, notify }) {
   const { logAction } = registerAdminRoutes(app, { db, config, requirePermission });
   registerStaffRoutes(app, { db, config, requirePermission, logAction });
   registerSupportRoutes(app, { db, config, requireUser, requirePermission, notify });
+  registerOrderRoutes(app, { db, config, requireUser, requirePermission, notify });
+  app.decorate('notify', notify);
 
   return app;
 }

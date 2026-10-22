@@ -16,6 +16,8 @@ import AdminPage from './pages/admin/AdminPage';
 import AdminEventPage from './pages/admin/AdminEventPage';
 import AdminThreadPage from './pages/admin/AdminThreadPage';
 import { SupportListPage, SupportNewPage, SupportThreadPage } from './pages/SupportPage';
+import { OrderPage } from './pages/OrdersPage';
+import WalletPage from './pages/WalletPage';
 
 // Экраны со своей кнопкой действия внизу — таб-бар бы её перекрывал
 const NO_TAB_BAR = ['/checkout', '/sell/new', '/admin/events/', '/admin/support/', '/support/'];
@@ -50,6 +52,8 @@ export default function App() {
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/admin/events/:id" element={<AdminEventPage />} />
         <Route path="/admin/support/:id" element={<AdminThreadPage />} />
+        <Route path="/orders/:id" element={<OrderPage />} />
+        <Route path="/wallet" element={<WalletPage />} />
         <Route path="/support" element={<SupportListPage />} />
         <Route path="/support/new" element={<SupportNewPage />} />
         <Route path="/support/:id" element={<SupportThreadPage />} />
