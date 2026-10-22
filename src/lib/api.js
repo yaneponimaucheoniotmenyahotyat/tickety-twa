@@ -61,6 +61,23 @@ export const adminRemoveListing = (id, reason) => api(`/api/admin/listings/${id}
 export const adminBlockUser = (id, reason) => api(`/api/admin/users/${id}/block`, { method: 'POST', body: { reason } });
 export const adminUnblockUser = (id) => api(`/api/admin/users/${id}/unblock`, { method: 'POST' });
 
+export const adminWithdrawEvent = (id, reason) => api(`/api/admin/events/${id}/withdraw`, { method: 'POST', body: { reason } });
+export const adminPublishEvent = (id) => api(`/api/admin/events/${id}/publish`, { method: 'POST' });
+export const adminDeleteEvent = (id) => api(`/api/admin/events/${id}`, { method: 'DELETE' });
+export const adminStaff = () => api('/api/admin/staff');
+export const adminAddStaff = (userId, role) => api('/api/admin/staff', { method: 'POST', body: { userId, role } });
+export const adminRemoveStaff = (userId, role) => api(`/api/admin/staff/${userId}/${role}`, { method: 'DELETE' });
+export const adminSupportThreads = (status = 'open') => api(`/api/admin/support?status=${status}`);
+export const adminSupportThread = (id) => api(`/api/admin/support/${id}`);
+export const adminSupportReply = (id, body) => api(`/api/admin/support/${id}/messages`, { method: 'POST', body: { body } });
+export const adminSupportClose = (id) => api(`/api/admin/support/${id}/close`, { method: 'POST' });
+
+// ---- Поддержка ----
+export const supportThreads = () => api('/api/support/threads');
+export const supportThread = (id) => api(`/api/support/threads/${id}`);
+export const createSupportThread = (body) => api('/api/support/threads', { method: 'POST', body });
+export const sendSupportMessage = (id, body) => api(`/api/support/threads/${id}/messages`, { method: 'POST', body: { body } });
+
 // ---- Объявления ----
 export const fetchListings = () => api('/api/listings');
 export const fetchMyListings = () => api('/api/me/listings');

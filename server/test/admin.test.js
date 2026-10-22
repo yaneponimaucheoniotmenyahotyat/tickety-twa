@@ -176,16 +176,18 @@ test('блокировка продавца снимает его объявле
   assert.deepEqual(log.map((r) => r.action), ['user_block', 'user_unblock']);
 });
 
-test('браузер может отправить PUT с другого адреса (CORS preflight)', async () => {
-  const res = await ctx.app.inject({
-    method: 'OPTIONS',
-    url: '/api/admin/events/ev1',
-    headers: {
-      origin: 'http://127.0.0.1:5173',
-      'access-control-request-method': 'PUT',
-      'access-control-request-headers': 'authorization,content-type',
-    },
-  });
-  assert.equal(res.statusCode, 204);
-  assert.match(res.headers['access-control-allow-methods'], /PUT/);
+test('браузер может отправить PUT и DELETE с другого адреса (CORS preflight)', async () => {
+  for (const method of ['PUT', 'DELETE']) {
+    const res = await ctx.app.inject({
+      method: 'OPTIONS',
+      url: '/api/admin/events/ev1',
+      headers: {
+        origin: 'http://127.0.0.1:5173',
+        'access-control-request-method': method,
+        'access-control-request-headers': 'authorization,content-type',
+      },
+    });
+    assert.equal(res.statusCode, 204);
+    assert.match(res.headers['access-control-allow-methods'], new RegExp(method));
+  }
 });

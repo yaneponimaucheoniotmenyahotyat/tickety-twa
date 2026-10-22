@@ -1,10 +1,12 @@
 // Админка: события с прайсом зон и модерация объявлений.
-// Доступ — только ADMIN_IDS (requireAdmin); каждое действие пишется в admin_actions.
+// Доступ — по правам команды (staff.js): events — события, moderation — объявления и продавцы.
+// Каждое действие пишется в admin_actions.
 import { randomBytes } from 'node:crypto';
 import { SEATING, eventError } from '../../shared/eventRules.js';
 import { HttpError } from './errors.js';
 import { loadEvents } from './events.js';
 import { LISTING_SELECT, toOffer } from './listings.js';
+import { isStaff } from './staff.js';
 
 const UUID = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
 const str = (maxLength) => ({ type: 'string', maxLength });
@@ -97,22 +99,32 @@ const logAction = (q, adminId, action, targetType, targetId, reason = null) =>
     [adminId, action, targetType, String(targetId), reason],
   );
 
-// Активные объявления по событиям — чтобы в админке было видно, что затронет правка
-async function activeCounts(db) {
-  const rows = await db.query(`SELECT event_id, count(*)::int AS n FROM listings WHERE status = 'active' GROUP BY event_id`);
-  return new Map(rows.map((r) => [r.event_id, r.n]));
+// Объявления по событиям: активные — что затронет правка, всего — можно ли удалить событие
+async function listingCounts(db) {
+  const rows = await db.query(
+    `SELECT event_id, count(*) FILTER (WHERE status = 'active')::int AS active, count(*)::int AS total
+     FROM listings GROUP BY event_id`,
+  );
+  return new Map(rows.map((r) => [r.event_id, r]));
 }
+const withCounts = (event, counts) => ({
+  ...event,
+  activeListings: counts.get(event.id)?.active ?? 0,
+  totalListings: counts.get(event.id)?.total ?? 0,
+});
 
-export function registerAdminRoutes(app, { db, requireAdmin }) {
+export function registerAdminRoutes(app, { db, config, requirePermission }) {
+  const canEvents = requirePermission('events');
+  const canModerate = requirePermission('moderation');
   const eventParams = { type: 'object', properties: { id: str(32) } };
 
   // Все события, включая скрытые и прошедшие
-  app.get('/api/admin/events', { preHandler: requireAdmin }, async () => {
-    const [events, counts] = await Promise.all([loadEvents(db), activeCounts(db)]);
-    return { events: events.map((e) => ({ ...e, activeListings: counts.get(e.id) ?? 0 })) };
+  app.get('/api/admin/events', { preHandler: canEvents }, async () => {
+    const [events, counts] = await Promise.all([loadEvents(db), listingCounts(db)]);
+    return { events: events.map((e) => withCounts(e, counts)) };
   });
 
-  app.post('/api/admin/events', { preHandler: requireAdmin, schema: { body: eventBody } }, async (req, reply) => {
+  app.post('/api/admin/events', { preHandler: canEvents, schema: { body: eventBody } }, async (req, reply) => {
     checkEvent(req.body);
     if (req.body.zones.some((z) => z.id)) throw new HttpError(400, 'bad_event', 'У новых зон не должно быть id');
     const id = newId('ev');
@@ -128,14 +140,14 @@ export function registerAdminRoutes(app, { db, requireAdmin }) {
     });
     const [event] = await loadEvents(db, 'e.id = $1', [id]);
     reply.code(201);
-    return { event: { ...event, activeListings: 0 } };
+    return { event: { ...event, activeListings: 0, totalListings: 0 } };
   });
 
   // Правка события целиком. Зоны: с id — обновить, без id — новые, пропавшие — удалить.
   // Номинал уже выставленных объявлений не меняется: он зафиксирован в момент публикации.
   app.put(
     '/api/admin/events/:id',
-    { preHandler: requireAdmin, schema: { params: eventParams, body: eventBody } },
+    { preHandler: canEvents, schema: { params: eventParams, body: eventBody } },
     async (req) => {
       checkEvent(req.body);
       const { id } = req.params;
@@ -171,16 +183,74 @@ export function registerAdminRoutes(app, { db, requireAdmin }) {
         await saveZones(t, id, req.body.zones);
         await logAction(t, req.user.id, 'event_update', 'event', id);
       });
-      const [[event], counts] = await Promise.all([loadEvents(db, 'e.id = $1', [id]), activeCounts(db)]);
-      return { event: { ...event, activeListings: counts.get(id) ?? 0 } };
+      const [[event], counts] = await Promise.all([loadEvents(db, 'e.id = $1', [id]), listingCounts(db)]);
+      return { event: withCounts(event, counts) };
     },
   );
+
+  // Снять событие с витрины (отменено, ошибка в данных): скрыть и снять все его объявления с причиной
+  app.post(
+    '/api/admin/events/:id/withdraw',
+    { preHandler: canEvents, schema: { params: eventParams, body: reasonBody } },
+    async (req) => {
+      const { id } = req.params;
+      const reason = req.body.reason.trim();
+      const removed = await db.tx(async (t) => {
+        const [found] = await t.query(
+          `UPDATE events SET status = 'hidden', updated_at = now() WHERE id = $1 RETURNING id`,
+          [id],
+        );
+        if (!found) throw new HttpError(404, 'event_not_found', 'Такого события нет');
+        const rows = await t.query(
+          `UPDATE listings SET status = 'removed', withdrawn_at = now(), removed_reason = $2, removed_by = $3
+           WHERE event_id = $1 AND status = 'active' RETURNING id`,
+          [id, `Событие снято с продажи: ${reason}`, req.user.id],
+        );
+        await logAction(t, req.user.id, 'event_withdraw', 'event', id, reason);
+        return rows.length;
+      });
+      const [[event], counts] = await Promise.all([loadEvents(db, 'e.id = $1', [id]), listingCounts(db)]);
+      return { event: withCounts(event, counts), removedListings: removed };
+    },
+  );
+
+  // Вернуть скрытое событие на витрину (снятые объявления не возвращаются)
+  app.post('/api/admin/events/:id/publish', { preHandler: canEvents, schema: { params: eventParams } }, async (req) => {
+    const [found] = await db.query(
+      `UPDATE events SET status = 'published', updated_at = now() WHERE id = $1 RETURNING id`,
+      [req.params.id],
+    );
+    if (!found) throw new HttpError(404, 'event_not_found', 'Такого события нет');
+    await logAction(db, req.user.id, 'event_publish', 'event', found.id);
+    const [[event], counts] = await Promise.all([loadEvents(db, 'e.id = $1', [found.id]), listingCounts(db)]);
+    return { event: withCounts(event, counts) };
+  });
+
+  // Удалить можно только событие, на которое ни разу не выставляли билеты (например, создано по ошибке).
+  // Иначе — только снять с витрины: история объявлений и обращений должна остаться.
+  app.delete('/api/admin/events/:id', { preHandler: canEvents, schema: { params: eventParams } }, async (req) => {
+    const { id } = req.params;
+    await db.tx(async (t) => {
+      const [found] = await t.query(`SELECT id FROM events WHERE id = $1 FOR UPDATE`, [id]);
+      if (!found) throw new HttpError(404, 'event_not_found', 'Такого события нет');
+      const [{ n }] = await t.query(
+        `SELECT (SELECT count(*) FROM listings WHERE event_id = $1) + (SELECT count(*) FROM ticket_checks WHERE event_id = $1) AS n`,
+        [id],
+      );
+      if (Number(n) > 0) {
+        throw new HttpError(409, 'event_has_listings', 'На событие уже выставляли билеты — его можно только снять с витрины');
+      }
+      await t.query(`DELETE FROM events WHERE id = $1`, [id]);
+      await logAction(t, req.user.id, 'event_delete', 'event', id);
+    });
+    return { ok: true };
+  });
 
   // Объявления для модерации: активные или снятые модератором
   app.get(
     '/api/admin/listings',
     {
-      preHandler: requireAdmin,
+      preHandler: canModerate,
       schema: { querystring: { type: 'object', properties: { status: { type: 'string', enum: ['active', 'removed'] } } } },
     },
     async (req) => {
@@ -211,7 +281,7 @@ export function registerAdminRoutes(app, { db, requireAdmin }) {
   app.post(
     '/api/admin/listings/:id/remove',
     {
-      preHandler: requireAdmin,
+      preHandler: canModerate,
       schema: { params: { type: 'object', properties: { id: { type: 'string', pattern: UUID } } }, body: reasonBody },
     },
     async (req) => {
@@ -232,11 +302,14 @@ export function registerAdminRoutes(app, { db, requireAdmin }) {
   // Блокировка продавца: продавать больше нельзя, все его активные объявления снимаются
   app.post(
     '/api/admin/users/:id/block',
-    { preHandler: requireAdmin, schema: { params: userParams, body: reasonBody } },
+    { preHandler: canModerate, schema: { params: userParams, body: reasonBody } },
     async (req) => {
       const userId = Number(req.params.id);
       const reason = req.body.reason.trim();
       if (userId === Number(req.user.id)) throw new HttpError(400, 'self_block', 'Себя заблокировать нельзя');
+      if (await isStaff(db, config, userId)) {
+        throw new HttpError(403, 'staff_block', 'Это участник команды — сначала владелец должен снять с него роль');
+      }
       const removed = await db.tx(async (t) => {
         const [user] = await t.query(
           `UPDATE users SET blocked_at = now(), blocked_reason = $2 WHERE id = $1 RETURNING id`,
@@ -256,7 +329,7 @@ export function registerAdminRoutes(app, { db, requireAdmin }) {
   );
 
   // Разблокировка возвращает право продавать; снятые объявления не восстанавливаются
-  app.post('/api/admin/users/:id/unblock', { preHandler: requireAdmin, schema: { params: userParams } }, async (req) => {
+  app.post('/api/admin/users/:id/unblock', { preHandler: canModerate, schema: { params: userParams } }, async (req) => {
     const [user] = await db.query(
       `UPDATE users SET blocked_at = NULL, blocked_reason = NULL WHERE id = $1 RETURNING id`,
       [Number(req.params.id)],
@@ -265,4 +338,6 @@ export function registerAdminRoutes(app, { db, requireAdmin }) {
     await logAction(db, req.user.id, 'user_unblock', 'user', user.id);
     return { ok: true };
   });
+
+  return { logAction };
 }

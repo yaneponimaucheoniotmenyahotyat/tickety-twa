@@ -34,11 +34,21 @@ npm run seed:demo        # уже добавленные пропускаютс�
 Тогда запросы идут с заголовком `Authorization: dev 1001`.
 С `NODE_ENV=production` сервер с `ALLOW_DEV_AUTH=1` **не запустится**.
 
-### Администраторы
+### Команда и права
 
-`server/.env`: `ADMIN_IDS=<telegram id>,<telegram id>`. У них в «Профиле» появляется «Админка»:
-события с прайсом зон, снятие объявлений с причиной, блокировка продавцов.
-Права задаются только на сервере — через API их не выдать. Действия пишутся в `admin_actions`.
+- **Владелец** — `server/.env`: `ADMIN_IDS=<telegram id>,…`. Всё, включая вкладку «Команда». Через API владельцем не стать.
+- **Модератор** — события (создать, править, снять с витрины, удалить) и модерация объявлений; видит жалобы.
+- **Поддержка** — обращения пользователей.
+
+Роли выдаёт и забирает владелец в «Админка → Команда» (человек должен хотя бы раз открыть Tickety).
+Права проверяются на каждом запросе — снятая роль действует сразу. Участника команды нельзя заблокировать.
+Действия пишутся в `admin_actions`.
+
+### Уведомления бота
+
+Новое обращение → владельцам и поддержке (жалобы — ещё и модераторам). Ответ команды → пользователю.
+Если пользователь не запускал бота, сообщение просто не доставится — ответ всё равно виден в приложении.
+`KEEP_REJECTED=1` (только вне production) — сохранять файлы без кода в `.data/rejected` для отладки распознавания.
 
 ## Тесты
 
@@ -59,13 +69,22 @@ npm test
 | POST | `/api/ticket-checks` | Telegram + номер | multipart `eventId` + `file`: формат, QR-код/штрихкод, дубли → `{ checkId, fileKind, code, codes }` |
 | POST | `/api/listings` | Telegram + номер | `{ checkId, zone, price, quantity, sector?, row?, seat? }` → объявление |
 | POST | `/api/listings/:id/withdraw` | Telegram (владелец) | Снять с продажи |
-| GET | `/api/admin/events` | админ | Все события, включая скрытые, с числом билетов в продаже |
-| POST | `/api/admin/events` | админ | Новое событие: поля + `zones: [{ label, nominal, seating: free|seats|sector }]` |
-| PUT | `/api/admin/events/:id` | админ | Правка целиком; зоны с `id` обновляются, зону с билетами в продаже не удалить (`409`) |
-| GET | `/api/admin/listings?status=active|removed` | админ | Очередь модерации с данными продавца |
-| POST | `/api/admin/listings/:id/remove` | админ | `{ reason }` — снять объявление, причину видит продавец |
-| POST | `/api/admin/users/:id/block` | админ | `{ reason }` — запретить продавать и снять все его объявления |
-| POST | `/api/admin/users/:id/unblock` | админ | Вернуть право продавать (снятые объявления не возвращаются) |
+| GET | `/api/support/threads` | Telegram | Мои обращения |
+| POST | `/api/support/threads` | Telegram | `{ category: question|buying|selling|complaint, body, listingId? }`; не больше 3 открытых |
+| GET / POST | `/api/support/threads/:id(/messages)` | Telegram (автор) | Переписка / новое сообщение (переоткрывает обращение) |
+| GET | `/api/admin/events` | модератор | Все события, включая скрытые, с числом билетов в продаже |
+| POST | `/api/admin/events` | модератор | Новое событие: поля + `zones: [{ label, nominal, seating: free|seats|sector }]` |
+| PUT | `/api/admin/events/:id` | модератор | Правка целиком; зоны с `id` обновляются, зону с билетами в продаже не удалить (`409`) |
+| GET | `/api/admin/listings?status=active|removed` | модератор | Очередь модерации с данными продавца |
+| POST | `/api/admin/listings/:id/remove` | модератор | `{ reason }` — снять объявление, причину видит продавец |
+| POST | `/api/admin/users/:id/block` | модератор | `{ reason }` — запретить продавать и снять все его объявления |
+| POST | `/api/admin/users/:id/unblock` | модератор | Вернуть право продавать (снятые объявления не возвращаются) |
+| POST | `/api/admin/events/:id/withdraw` | модератор | `{ reason }` — скрыть событие и снять все его объявления |
+| POST | `/api/admin/events/:id/publish` | модератор | Вернуть на витрину |
+| DELETE | `/api/admin/events/:id` | модератор | Удалить, только если билеты на него ни разу не выставляли |
+| GET | `/api/admin/support?status=open|answered|closed` | поддержка (модератор — только жалобы) | Очередь обращений |
+| GET / POST | `/api/admin/support/:id(/messages|/close)` | поддержка | Обращение, ответ (бот уведомит пользователя), закрыть |
+| GET / POST / DELETE | `/api/admin/staff(/:userId/:role)` | владелец | Команда: список, выдать и забрать роль |
 
 ### Что сервер не доверяет клиенту
 

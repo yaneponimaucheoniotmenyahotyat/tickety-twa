@@ -5,10 +5,14 @@ import { registerAdminRoutes } from './admin.js';
 import { HttpError } from './errors.js';
 import { registerEventRoutes } from './events.js';
 import { registerListingRoutes } from './listings.js';
+import { createNotifier } from './notify.js';
+import { accessOf, registerStaffRoutes } from './staff.js';
+import { registerSupportRoutes } from './support.js';
 import { AuthError, validateContact, validateInitData } from './telegramAuth.js';
 
 // Сборка приложения отдельно от запуска — тесты поднимают его без сети (app.inject)
-export async function buildApp({ config, db, logger = false }) {
+// notify — отправка сообщений ботом; в тестах подменяется записью в массив
+export async function buildApp({ config, db, logger = false, notify }) {
   const app = Fastify({
     logger,
     trustProxy: true,
@@ -19,8 +23,9 @@ export async function buildApp({ config, db, logger = false }) {
 
   await app.register(cors, {
     origin: config.allowedOrigins,
-    // По умолчанию @fastify/cors разрешает только GET, HEAD и POST — без PUT правка события из админки не дойдёт
-    methods: ['GET', 'HEAD', 'POST', 'PUT'],
+    // По умолчанию @fastify/cors разрешает только GET, HEAD и POST — без PUT и DELETE
+    // правка и удаление в админке не дойдут из браузера
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Authorization', 'Content-Type'],
     maxAge: 600,
   });
@@ -105,10 +110,14 @@ export async function buildApp({ config, db, logger = false }) {
     phoneVerified: Boolean(row.phone_verified_at),
     phoneMasked: maskPhone(row.phone),
     blocked: Boolean(row.blocked_at),
-    // Права администратора — из ADMIN_IDS на сервере; через API их не выдать
-    isAdmin: config.adminIds.has(Number(row.id)),
     createdAt: row.created_at,
   });
+
+  // Пользователь + его права в команде: владелец (ADMIN_IDS) или роли, выданные владельцем
+  async function userWithAccess(row) {
+    const access = await accessOf(db, config, row.id);
+    return { ...publicUser(row), isAdmin: access.permissions.length > 0, staff: access };
+  }
 
   app.get('/api/health', async () => {
     await db.query('SELECT 1');
@@ -116,7 +125,7 @@ export async function buildApp({ config, db, logger = false }) {
   });
 
   app.get('/api/me', { preHandler: requireUser }, async (req) => ({
-    user: publicUser(req.user),
+    user: await userWithAccess(req.user),
     isNew: req.user.inserted,
   }));
 
@@ -150,19 +159,30 @@ export async function buildApp({ config, db, logger = false }) {
         `INSERT INTO identity_verifications (user_id, method, subject) VALUES ($1, 'telegram_phone', $2)`,
         [req.user.id, contact.phone],
       );
-      return { user: publicUser(row) };
+      return { user: await userWithAccess(row) };
     },
   );
 
-  // Только для ADMIN_IDS: остальным — 403, даже с верной подписью Telegram
-  const requireAdmin = async (req) => {
+  // Права команды проверяются на каждом запросе по базе: снятая роль действует сразу.
+  // Остальным — 403, даже с верной подписью Telegram.
+  app.decorateRequest('access', null);
+  const attachAccess = async (req) => {
     await requireUser(req);
-    if (!config.adminIds.has(Number(req.user.id))) throw new HttpError(403, 'forbidden', 'Нужны права администратора');
+    req.access = await accessOf(db, config, req.user.id);
   };
+  const requirePermission = (permission) => async (req) => {
+    await attachAccess(req);
+    if (!req.access.permissions.includes(permission)) throw new HttpError(403, 'forbidden', 'Нет доступа к этому разделу');
+  };
+  requirePermission.attach = attachAccess;
+
+  notify ??= createNotifier({ botToken: config.botToken, log: app.log });
 
   registerEventRoutes(app, { db });
   registerListingRoutes(app, { db, config, requireUser, optionalUser });
-  registerAdminRoutes(app, { db, requireAdmin });
+  const { logAction } = registerAdminRoutes(app, { db, config, requirePermission });
+  registerStaffRoutes(app, { db, config, requirePermission, logAction });
+  registerSupportRoutes(app, { db, config, requireUser, requirePermission, notify });
 
   return app;
 }

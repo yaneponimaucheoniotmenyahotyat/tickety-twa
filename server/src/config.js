@@ -30,6 +30,10 @@ export function loadConfig(env = process.env) {
     allowDevAuth,
     // Администраторы — Telegram id через запятую
     adminIds: new Set((env.ADMIN_IDS ?? '').split(',').map((s) => Number(s.trim())).filter((n) => Number.isSafeInteger(n) && n > 0)),
+    // Только для отладки распознавания кодов: KEEP_REJECTED=1 сохраняет файлы, на которых код
+    // не нашёлся, в .data/rejected. В production выключено всегда — это чужие файлы.
+    rejectedDir:
+      !production && env.KEEP_REJECTED === '1' ? fileURLToPath(new URL('../.data/rejected', import.meta.url)) : null,
     // Куда сохранять файлы билетов. 'off' — не сохранять (тесты)
     uploadDir:
       env.UPLOAD_DIR === 'off' ? null : env.UPLOAD_DIR || fileURLToPath(new URL('../.data/uploads', import.meta.url)),

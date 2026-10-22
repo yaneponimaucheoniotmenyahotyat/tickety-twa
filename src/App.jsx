@@ -14,9 +14,11 @@ import SellPage from './pages/SellPage';
 import SellWizardPage from './pages/SellWizardPage';
 import AdminPage from './pages/admin/AdminPage';
 import AdminEventPage from './pages/admin/AdminEventPage';
+import AdminThreadPage from './pages/admin/AdminThreadPage';
+import { SupportListPage, SupportNewPage, SupportThreadPage } from './pages/SupportPage';
 
 // Экраны со своей кнопкой действия внизу — таб-бар бы её перекрывал
-const NO_TAB_BAR = ['/checkout', '/sell/new', '/admin/events/'];
+const NO_TAB_BAR = ['/checkout', '/sell/new', '/admin/events/', '/admin/support/', '/support/'];
 
 export default function App() {
   useTelegramBackButton();
@@ -47,6 +49,10 @@ export default function App() {
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/admin/events/:id" element={<AdminEventPage />} />
+        <Route path="/admin/support/:id" element={<AdminThreadPage />} />
+        <Route path="/support" element={<SupportListPage />} />
+        <Route path="/support/new" element={<SupportNewPage />} />
+        <Route path="/support/:id" element={<SupportThreadPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {withTabBar && <TabBar />}

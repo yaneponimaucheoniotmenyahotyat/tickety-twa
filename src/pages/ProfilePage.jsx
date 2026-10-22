@@ -245,12 +245,21 @@ export default function ProfilePage() {
               }
             />
           )}
+          {account.status === 'ok' && (
+            <ListRow
+              icon="shield-heart"
+              iconClass="bg-brand-soft text-brand"
+              title="Поддержка"
+              subtitle="Вопрос, проблема с покупкой или продажей"
+              onClick={() => navigate('/support')}
+            />
+          )}
           {account.status === 'ok' && account.user.isAdmin && (
             <ListRow
               icon="tune"
               iconClass="bg-brand text-white"
               title="Админка"
-              subtitle="События, прайс зон, модерация объявлений"
+              subtitle={account.user.staff?.owner ? 'Владелец • события, модерация, поддержка, команда' : 'Для команды Tickety'}
               onClick={() => navigate('/admin')}
             />
           )}

@@ -11,12 +11,20 @@ import SegmentedControl from '@/components/ui/SegmentedControl';
 import { refreshEvents } from '@/data/eventsStore';
 import { refreshListings } from '@/data/listingsStore';
 import { useServerAccount } from '@/hooks/useServerAccount';
+import { THREAD_STATUS } from '@/components/support/Conversation';
 import {
+  adminAddStaff,
   adminBlockUser,
+  adminDeleteEvent,
   adminEvents,
   adminListings,
+  adminPublishEvent,
   adminRemoveListing,
+  adminRemoveStaff,
+  adminStaff,
+  adminSupportThreads,
   adminUnblockUser,
+  adminWithdrawEvent,
   apiEnabled,
 } from '@/lib/api';
 import { formatEventDate, formatPrice, plural } from '@/lib/format';
@@ -48,9 +56,130 @@ function useLoad(load, deps) {
   return [state, reload];
 }
 
+const WITHDRAW_REASONS = ['Событие отменено', 'Событие перенесено', 'Ошибка в данных события'];
+
+// Действия с событием из списка: изменить, снять с витрины (с объявлениями), вернуть, удалить
+function EventActionsSheet({ event, onClose, onChanged }) {
+  const navigate = useNavigate();
+  const [mode, setMode] = useState('menu'); // menu | withdraw
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    setMode('menu');
+    setReason('');
+    setError(null);
+  }, [event]);
+
+  const run = async (work) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await work();
+      haptic('success');
+      onChanged();
+    } catch (e) {
+      haptic('error');
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!(await confirmDialog(`Удалить «${event.title}» насовсем?`))) return;
+    await run(() => adminDeleteEvent(event.id));
+  };
+
+  const row = 'pressable flex h-12 w-full items-center rounded-xl bg-fill px-4 text-body font-semibold';
+
+  return (
+    <BottomSheet
+      open={Boolean(event)}
+      onClose={onClose}
+      header={
+        event && (
+          <div>
+            <h2 className="truncate text-title3">{event.title}</h2>
+            <p className="text-footnote text-label-secondary">
+              {event.status === 'hidden' ? 'Скрыто с витрины' : 'На витрине'} • в продаже {event.activeListings}
+            </p>
+          </div>
+        )
+      }
+      footer={
+        mode === 'withdraw' && (
+          <div>
+            {error && <p className="mb-2 text-center text-footnote text-danger">{error}</p>}
+            <Button
+              size="lg"
+              block
+              loading={busy}
+              disabled={reason.trim().length < 3}
+              onClick={() => run(() => adminWithdrawEvent(event.id, reason.trim()))}
+            >
+              Снять с витрины
+            </Button>
+          </div>
+        )
+      }
+    >
+      {event && mode === 'menu' && (
+        <div className="space-y-2 pb-2">
+          <button type="button" className={row} onClick={() => navigate(`/admin/events/${event.id}`)}>
+            Изменить событие и прайс
+          </button>
+          {event.status === 'published' ? (
+            <button type="button" className={`${row} text-danger`} onClick={() => setMode('withdraw')}>
+              Снять с витрины…
+            </button>
+          ) : (
+            <button type="button" className={row} disabled={busy} onClick={() => run(() => adminPublishEvent(event.id))}>
+              Вернуть на витрину
+            </button>
+          )}
+          {event.totalListings === 0 ? (
+            <button type="button" className={`${row} text-danger`} disabled={busy} onClick={remove}>
+              Удалить событие
+            </button>
+          ) : (
+            <p className="px-1 text-caption1 text-label-tertiary">
+              На событие уже выставляли билеты — удалить нельзя, только снять с витрины.
+            </p>
+          )}
+          {error && <p className="text-center text-footnote text-danger">{error}</p>}
+        </div>
+      )}
+      {event && mode === 'withdraw' && (
+        <div>
+          <p className="mb-2 text-footnote text-label-secondary">
+            Событие пропадёт с витрины
+            {event.activeListings > 0 ? `, а ${event.activeListings} ${plural(event.activeListings, ['объявление', 'объявления', 'объявлений'])} снимутся с продажи. Причину увидят продавцы` : ''}.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {WITHDRAW_REASONS.map((r) => (
+              <Chip key={r} size="sm" variant="brand" active={reason === r} onClick={() => setReason(r)}>
+                {r}
+              </Chip>
+            ))}
+          </div>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value.slice(0, 300))}
+            placeholder="Или своими словами"
+            rows={2}
+            className="mt-3 w-full rounded-xl bg-fill px-3 py-2 text-body outline-none"
+          />
+        </div>
+      )}
+    </BottomSheet>
+  );
+}
+
 function EventsTab() {
   const navigate = useNavigate();
-  const [state] = useLoad(adminEvents, []);
+  const [state, reload] = useLoad(adminEvents, []);
+  const [selected, setSelected] = useState(null);
 
   return (
     <div className="space-y-3">
@@ -72,8 +201,8 @@ function EventsTab() {
               <button
                 key={e.id}
                 type="button"
-                onClick={() => navigate(`/admin/events/${e.id}`)}
-                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-fill/60 ${past ? 'opacity-60' : ''}`}
+                onClick={() => setSelected(e)}
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-fill/60 ${past || e.status === 'hidden' ? 'opacity-60' : ''}`}
               >
                 <EventCover event={e} className="h-11 w-11 shrink-0 rounded-xl" />
                 <span className="min-w-0 flex-1">
@@ -95,6 +224,172 @@ function EventsTab() {
               </button>
             );
           })}
+        </div>
+      )}
+      <EventActionsSheet
+        event={selected}
+        onClose={() => setSelected(null)}
+        onChanged={() => {
+          setSelected(null);
+          reload();
+          refreshEvents();
+          refreshListings();
+        }}
+      />
+    </div>
+  );
+}
+
+// ---- Обращения ----
+function SupportTab() {
+  const navigate = useNavigate();
+  const [status, setStatus] = useState('open');
+  const [state] = useLoad(() => adminSupportThreads(status), [status]);
+  const threads = state.status === 'ok' ? state.data.threads : [];
+
+  return (
+    <div className="space-y-3">
+      <SegmentedControl
+        value={status}
+        onChange={setStatus}
+        options={[
+          { value: 'open', label: 'Ждут ответа' },
+          { value: 'answered', label: 'Отвечены' },
+          { value: 'closed', label: 'Закрыты' },
+        ]}
+      />
+      {state.status === 'loading' && <PageLoader />}
+      {state.status === 'error' && <p className="text-center text-subhead text-danger">{state.error.message}</p>}
+      {state.status === 'ok' && threads.length === 0 && (
+        <p className="px-4 py-6 text-center text-subhead text-label-secondary">Пусто</p>
+      )}
+      {threads.length > 0 && (
+        <div className="card divide-y divide-separator overflow-hidden">
+          {threads.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => navigate(`/admin/support/${t.id}`)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-fill/60"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="truncate text-headline">{t.user.name}</span>
+                  {t.category === 'complaint' && (
+                    <Badge size="sm" tone="danger">
+                      Жалоба
+                    </Badge>
+                  )}
+                </span>
+                <span className="block truncate text-footnote text-label-secondary">
+                  {t.categoryLabel} • {t.lastMessage?.body}
+                </span>
+              </span>
+              <span className="shrink-0 text-caption1 text-label-tertiary">
+                {new Date(t.updatedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Команда (только владелец) ----
+function TeamTab() {
+  const [state, reload] = useLoad(adminStaff, []);
+  const [userId, setUserId] = useState('');
+  const [role, setRole] = useState('moderator');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const add = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await adminAddStaff(Number(userId), role);
+      haptic('success');
+      setUserId('');
+      reload();
+    } catch (e) {
+      haptic('error');
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (member, r) => {
+    if (!(await confirmDialog(`Забрать роль «${state.data.roles[r]}» у ${member.name ?? member.id}?`))) return;
+    try {
+      await adminRemoveStaff(member.id, r);
+      reload();
+    } catch (e) {
+      await confirmDialog(e.message);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <section className="card space-y-3 p-4">
+        <div>
+          <h2 className="text-headline">Добавить в команду</h2>
+          <p className="text-footnote text-label-secondary">
+            Модератор — события и объявления, поддержка — обращения. Человек должен хотя бы раз открыть Tickety;
+            его Telegram ID можно узнать, например, у бота @userinfobot.
+          </p>
+        </div>
+        <input
+          value={userId}
+          onChange={(e) => setUserId(e.target.value.replace(/\D/g, '').slice(0, 15))}
+          inputMode="numeric"
+          placeholder="Telegram ID"
+          className="h-11 w-full rounded-xl bg-fill px-3 text-body outline-none placeholder:text-label-tertiary"
+        />
+        <SegmentedControl
+          value={role}
+          onChange={setRole}
+          options={[
+            { value: 'moderator', label: 'Модератор' },
+            { value: 'support', label: 'Поддержка' },
+          ]}
+        />
+        {error && <p className="text-footnote text-danger">{error}</p>}
+        <Button block loading={busy} disabled={!userId} onClick={add}>
+          Выдать роль
+        </Button>
+      </section>
+
+      {state.status === 'loading' && <PageLoader />}
+      {state.status === 'ok' && (
+        <div className="card divide-y divide-separator overflow-hidden">
+          {state.data.staff.map((m) => (
+            <div key={m.id} className="px-4 py-3">
+              <p className="truncate text-headline">
+                {m.name ?? 'Ещё не открывал Tickety'}
+                {m.username && <span className="font-normal text-label-secondary"> @{m.username}</span>}
+              </p>
+              <p className="text-caption1 text-label-tertiary">ID {m.id}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {m.owner && (
+                  <Badge size="sm" tone="brand">
+                    Владелец • задаётся на сервере
+                  </Badge>
+                )}
+                {m.roles.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => remove(m, r)}
+                    className="pressable rounded-chip bg-fill px-2.5 py-1 text-caption1 font-semibold"
+                  >
+                    {state.data.roles[r]} ×
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -302,11 +597,21 @@ function ListingsTab() {
   );
 }
 
+const TABS = [
+  { value: 'events', label: 'События', can: (p) => p.includes('events'), Tab: EventsTab },
+  { value: 'listings', label: 'Модерация', can: (p) => p.includes('moderation'), Tab: ListingsTab },
+  { value: 'support', label: 'Обращения', can: (p) => p.includes('support') || p.includes('moderation'), Tab: SupportTab },
+  { value: 'team', label: 'Команда', can: (p) => p.includes('team'), Tab: TeamTab },
+];
+
 export default function AdminPage() {
   const account = useServerAccount();
-  // Вкладка — в адресе: «Назад» из формы события возвращает на неё же
+  // Вкладки — по правам из /api/me (сервер всё равно проверяет каждый запрос)
+  const permissions = account.status === 'ok' ? (account.user.staff?.permissions ?? []) : [];
+  const tabs = TABS.filter((t) => t.can(permissions));
+  // Вкладка — в адресе: «Назад» из формы события или обращения возвращает на неё же
   const [params, setParams] = useSearchParams();
-  const tab = params.get('tab') === 'listings' ? 'listings' : 'events';
+  const tab = tabs.find((t) => t.value === params.get('tab')) ?? tabs[0];
 
   // Правки событий видны на витрине этого устройства сразу после возврата из админки
   useEffect(() => () => void refreshEvents(), []);
@@ -316,15 +621,15 @@ export default function AdminPage() {
       <TopBar title="Админка" left={<BackLink label="Профиль" />} />
       <main className="space-y-3 px-gutter pb-6 pt-3">
         <AdminGate account={account}>
-          <SegmentedControl
-            value={tab}
-            onChange={(t) => setParams({ tab: t }, { replace: true })}
-            options={[
-              { value: 'events', label: 'События' },
-              { value: 'listings', label: 'Модерация' },
-            ]}
-          />
-          {tab === 'events' ? <EventsTab /> : <ListingsTab />}
+          {tabs.length > 1 && (
+            <SegmentedControl
+              dense
+              value={tab.value}
+              onChange={(t) => setParams({ tab: t }, { replace: true })}
+              options={tabs.map(({ value, label }) => ({ value, label }))}
+            />
+          )}
+          {tab && <tab.Tab />}
         </AdminGate>
       </main>
     </>

@@ -3,6 +3,7 @@ import Icon from '@/components/icons/Icon';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import { formatPrice, initials, plural, priceNote } from '@/lib/format';
+import { apiEnabled } from '@/lib/api';
 import { haptic } from '@/lib/telegram';
 
 function SellerRow({ seller }) {
@@ -84,6 +85,15 @@ export default function OfferCard({ offer }) {
           </Button>
         )}
       </div>
+      {apiEnabled && !offer.own && (
+        <button
+          type="button"
+          onClick={() => navigate(`/support/new?listing=${offer.id}`)}
+          className="mt-3 text-footnote text-label-tertiary"
+        >
+          Пожаловаться на объявление
+        </button>
+      )}
     </article>
   );
 }

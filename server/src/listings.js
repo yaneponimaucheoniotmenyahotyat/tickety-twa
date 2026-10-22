@@ -121,7 +121,13 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
     if (!kind) throw new HttpError(415, 'unsupported_file', 'Нужен PDF или фото билета (JPG, PNG, HEIC)');
 
     // Код входа: без QR-кода или штрихкода это не билет
-    const codes = await findCodes(buf, kind);
+    let codes;
+    try {
+      codes = await findCodes(buf, kind);
+    } catch (err) {
+      if (config.rejectedDir && err.code === 'no_code') await storeFile(config.rejectedDir, sha256(buf), kind, buf);
+      throw err;
+    }
     const codeHashes = codes.map(codeHash);
 
     // Дубли: тот же файл или тот же код (другой скриншот того же билета) уже в продаже

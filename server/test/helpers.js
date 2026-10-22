@@ -16,8 +16,11 @@ export async function setup({ seed = true } = {}) {
   const db = await openDb({ dataDir: 'memory://' });
   await migrate(db);
   if (seed) await seedCatalog(db);
-  const app = await buildApp({ config: loadConfig({ BOT_TOKEN: TOKEN, UPLOAD_DIR: 'off', ADMIN_IDS: String(ADMIN.id) }), db });
-  return { app, db, close: async () => (await app.close(), await db.close()) };
+  // Сообщения бота не уходят в Telegram — копятся в sent для проверок
+  const sent = [];
+  const notify = async (chatId, text) => (sent.push({ chatId, text }), true);
+  const app = await buildApp({ config: loadConfig({ BOT_TOKEN: TOKEN, UPLOAD_DIR: 'off', ADMIN_IDS: String(ADMIN.id) }), db, notify });
+  return { app, db, sent, close: async () => (await app.close(), await db.close()) };
 }
 
 export const tma = (user) =>
