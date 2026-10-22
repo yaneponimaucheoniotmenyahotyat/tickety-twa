@@ -19,6 +19,7 @@ import {
   listingTitle,
   runCheckAnimation,
   seatsError,
+  toUploadable,
   validateFile,
 } from '@/lib/ticketCheck';
 import { getUser, haptic, setClosingConfirmation } from '@/lib/telegram';
@@ -108,25 +109,29 @@ export default function SellWizardPage() {
     }
     setCheck({ status: 'running', step: 0, error: null });
 
-    // С сервером: формат по содержимому файла и поиск дублей. Без сервера — только формат.
-    // Анимация чек-листа идёт параллельно с запросом.
+    // С сервером: формат по содержимому, QR-код или штрихкод, дубли по коду и файлу.
+    // Без сервера (демо) — только формат. Анимация чек-листа идёт параллельно с запросом.
     const work = apiEnabled
-      ? uploadTicket(f, eventId).then((r) => {
-          setCheckId(r.checkId);
-          return r.fileKind;
-        })
-      : Promise.resolve(fileKindOf(f));
+      ? toUploadable(f)
+          .then((upload) => uploadTicket(upload, eventId))
+          .then((r) => {
+            setCheckId(r.checkId);
+            return r;
+          })
+      : Promise.resolve({ fileKind: fileKindOf(f) });
 
-    let fileKind;
+    let result;
     try {
-      fileKind = await runCheckAnimation(work, (i) => setCheck((c) => ({ ...c, step: i })));
+      result = await runCheckAnimation(work, (i) => setCheck((c) => ({ ...c, step: i })));
     } catch (e) {
       haptic('error');
       setCheck({ status: 'error', step: 0, error: e.message });
       return;
     }
     haptic('success');
-    setCheck({ status: 'done', step: CHECK_STEPS.length, error: null, fileKind });
+    // Билетов в лоте — не больше, чем кодов в файле
+    if (result.codes) setQuantity((q) => Math.min(q, result.codes));
+    setCheck({ status: 'done', step: CHECK_STEPS.length, error: null, fileKind: result.fileKind, code: result.code, codes: result.codes });
   };
 
   const publish = async () => {
@@ -229,6 +234,7 @@ export default function SellWizardPage() {
             event={event}
             title={listingTitle(zone, seats)}
             fileKind={check.fileKind}
+            code={check.code}
             nominal={zone.nominal}
             quantity={quantity}
             price={n}

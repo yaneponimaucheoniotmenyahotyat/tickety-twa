@@ -90,7 +90,11 @@ export default function TicketUploadStep({
         <section className="card p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-headline">Проверка файла</h2>
-            {check.status === 'done' && <Badge tone="success" icon="check">{check.fileKind}</Badge>}
+            {check.status === 'done' && (
+              <Badge tone="success" icon="check">
+                {check.code ? `${check.code} найден` : check.fileKind}
+              </Badge>
+            )}
           </div>
           <ul className="mt-3 space-y-2.5">
             {CHECK_STEPS.map((label, i) => {
@@ -154,9 +158,13 @@ export default function TicketUploadStep({
           <div className="flex items-center justify-between border-t border-separator pt-4">
             <span>
               <span className="block text-subhead">Билетов в лоте</span>
-              <span className="block text-caption1 text-label-tertiary">Несколько — значит места рядом</span>
+              <span className="block text-caption1 text-label-tertiary">
+                {check.codes === 1
+                  ? 'В файле один билет — для нескольких загрузите файл со всеми кодами'
+                  : 'Несколько — значит места рядом'}
+              </span>
             </span>
-            <Stepper value={quantity} onChange={onQuantity} />
+            <Stepper value={quantity} onChange={onQuantity} max={Math.min(4, check.codes ?? 4)} />
           </div>
         </section>
       )}

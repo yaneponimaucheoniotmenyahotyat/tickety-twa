@@ -12,7 +12,7 @@ const Row = ({ label, children }) => (
 );
 
 // Шаг 4: сводка и подтверждение владения билетом
-export default function ReviewStep({ event, title, fileKind, nominal, quantity, price, confirmed, onConfirm }) {
+export default function ReviewStep({ event, title, fileKind, code, nominal, quantity, price, confirmed, onConfirm }) {
   return (
     <div className="space-y-3">
       <h1 className="px-1 text-title2">Проверьте объявление</h1>
@@ -32,7 +32,7 @@ export default function ReviewStep({ event, title, fileKind, nominal, quantity, 
           <Row label="Билетов">{quantity}</Row>
           <Row label="Формат">
             <Badge tone="success" icon="check" size="sm">
-              {fileKind} • файл проверен
+              {fileKind} • {code ? `есть ${code}` : 'файл проверен'}
             </Badge>
           </Row>
           <Row label="Цена за билет">

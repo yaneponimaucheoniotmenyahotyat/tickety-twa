@@ -12,8 +12,8 @@ const carol = { id: 2001, first_name: 'Карина' };
 const dan = { id: 2002, first_name: 'Даниил' };
 const eve = { id: 2003, first_name: 'Ева' };
 
-const upload = (user) => {
-  const { payload, headers } = multipart({ eventId: 'mumiy-troll-vk' }, files.pdf());
+const upload = async (user) => {
+  const { payload, headers } = await multipart({ eventId: 'mumiy-troll-vk' }, files.pdf());
   return ctx.app.inject({ method: 'POST', url: '/api/ticket-checks', payload, headers: { ...headers, authorization: tma(user) } });
 };
 

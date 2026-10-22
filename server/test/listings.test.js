@@ -1,7 +1,7 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { catalogZones, findZone } from '../../shared/listingRules.js';
-import { files, multipart, setup, tma, users, verifyPhone } from './helpers.js';
+import { files, multipart, setup, ticketCode, tma, users, verifyPhone } from './helpers.js';
 
 // Событие из shared/catalog.js с датой в будущем (14.02.2027)
 const EVENT = 'mumiy-troll-vk';
@@ -18,7 +18,7 @@ before(async () => {
 after(() => ctx.close());
 
 async function upload(user, file, eventId = EVENT) {
-  const { payload, headers } = multipart({ eventId }, file);
+  const { payload, headers } = await multipart({ eventId }, file);
   return ctx.app.inject({ method: 'POST', url: '/api/ticket-checks', payload, headers: { ...headers, authorization: tma(user) } });
 }
 
@@ -26,7 +26,7 @@ const createListing = (user, body) =>
   ctx.app.inject({ method: 'POST', url: '/api/listings', payload: body, headers: { authorization: tma(user) } });
 
 test('загрузка без входа — 401', async () => {
-  const { payload, headers } = multipart({ eventId: EVENT }, files.pdf());
+  const { payload, headers } = await multipart({ eventId: EVENT }, files.pdf());
   const res = await ctx.app.inject({ method: 'POST', url: '/api/ticket-checks', payload, headers });
   assert.equal(res.statusCode, 401);
 });
@@ -37,15 +37,19 @@ test('текст, переименованный в .pdf, отклоняется
   assert.match(res.json().message, /PDF или фото/);
 });
 
-test('HEIC без MIME-типа распознаётся по сигнатуре', async () => {
+test('HEIC узнаётся по сигнатуре, но сервер просит скриншот — 415', async () => {
   const res = await upload(users.alice, files.heic());
-  assert.equal(res.statusCode, 201);
-  assert.equal(res.json().fileKind, 'Фото билета');
+  assert.equal(res.statusCode, 415);
+  assert.equal(res.json().error, 'heic');
+  assert.match(res.json().message, /скриншот/);
 });
 
-test('проверка файла ничего не «распознаёт» — только формат', async () => {
+test('ответ проверки: тип кода и их число, но не содержимое кода', async () => {
   const body = (await upload(users.alice, files.pdf())).json();
-  assert.deepEqual(Object.keys(body).sort(), ['checkId', 'fileKind']);
+  assert.deepEqual(Object.keys(body).sort(), ['checkId', 'code', 'codes', 'fileKind']);
+  assert.equal(body.code, 'QR-код');
+  assert.equal(body.codes, 1);
+  assert.doesNotMatch(JSON.stringify(body), /TKT-/);
 });
 
 test('неизвестное событие — 404', async () => {
@@ -84,7 +88,7 @@ test('зона и места: неизвестная зона и пустые м
 });
 
 test('полный путь: проверка → объявление → видно всем → снять', async () => {
-  const check = await upload(users.alice, files.pdf());
+  const check = await upload(users.alice, files.pdf(ticketCode(), ticketCode())); // два билета в одном PDF
   assert.equal(check.statusCode, 201);
   const { checkId } = check.json();
 

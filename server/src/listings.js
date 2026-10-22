@@ -1,6 +1,7 @@
 // Объявления: загрузка и проверка билета, создание, списки, снятие с продажи.
-// Что сервер проверяет на самом деле: формат файла (по сигнатуре), дубли файла (SHA-256),
-// подтверждённый номер продавца, цену ≤ номинала зоны. Штрихкод с организатором не сверяется.
+// Что сервер проверяет на самом деле: формат файла (по сигнатуре), наличие QR-кода или штрихкода,
+// дубли — по содержимому кода и по файлу, подтверждённый номер продавца, цену ≤ номинала зоны.
+// С организатором код не сверяется: настоящий ли билет, мы не знаем.
 import {
   MAX_FILE_MB,
   MAX_QUANTITY,
@@ -12,6 +13,7 @@ import {
 } from '../../shared/listingRules.js';
 import { HttpError } from './errors.js';
 import { upcomingEvent } from './events.js';
+import { codeHash, codeLabel, findCodes } from './ticketCodes.js';
 import { detectKind, kindLabel, sha256, storeFile } from './ticketFiles.js';
 
 const UUID = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
@@ -52,7 +54,8 @@ export function toOffer(row, viewerId) {
     eventId: row.event_id,
     zone: row.zone,
     title: row.title,
-    details: `${kindLabel(row.file_kind)} • файл проверен`,
+    // «есть QR-код» — код найден на файле; это не подтверждение подлинности билета
+    details: `${kindLabel(row.file_kind)} • ${row.code_format ? `есть ${codeLabel(row.code_format)}` : 'файл проверен'}`,
     delivery: row.file_kind === 'pdf' ? 'PDF' : 'Фото → PDF',
     eTicket: true,
     nominal: row.nominal,
@@ -117,24 +120,34 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
     const kind = detectKind(buf);
     if (!kind) throw new HttpError(415, 'unsupported_file', 'Нужен PDF или фото билета (JPG, PNG, HEIC)');
 
-    // Дубли: тот же файл уже в активном объявлении — второй раз выставить нельзя.
-    // Это поиск по содержимому файла, а не по штрихкоду: другой скриншот того же билета пройдёт.
+    // Код входа: без QR-кода или штрихкода это не билет
+    const codes = await findCodes(buf, kind);
+    const codeHashes = codes.map(codeHash);
+
+    // Дубли: тот же файл или тот же код (другой скриншот того же билета) уже в продаже
     const hash = sha256(buf);
-    const [dup] = await db.query(`SELECT seller_id FROM listings WHERE file_sha256 = $1 AND status = 'active'`, [hash]);
+    const [dup] = await db.query(
+      `SELECT l.seller_id FROM listings l
+       WHERE l.status = 'active'
+         AND (l.file_sha256 = $1 OR EXISTS (SELECT 1 FROM listing_codes c WHERE c.listing_id = l.id AND c.code_hash = ANY($2)))
+       LIMIT 1`,
+      [hash, codeHashes],
+    );
     if (dup) {
       const mine = Number(dup.seller_id) === Number(req.user.id);
       throw new HttpError(409, 'duplicate', mine ? 'Вы уже продаёте этот билет' : 'Этот билет уже продаётся на Tickety');
     }
 
     const [check] = await db.query(
-      `INSERT INTO ticket_checks (user_id, event_id, file_sha256, file_kind, file_size)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [req.user.id, event.id, hash, kind, buf.length],
+      `INSERT INTO ticket_checks (user_id, event_id, file_sha256, file_kind, file_size, code_hashes, code_format)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [req.user.id, event.id, hash, kind, buf.length, codeHashes, codes[0].format],
     );
     await storeFile(config.uploadDir, hash, kind, buf);
 
     reply.code(201);
-    return { checkId: check.id, fileKind: kindLabel(kind) };
+    // codes — сколько разных кодов (билетов) в файле: продать можно не больше
+    return { checkId: check.id, fileKind: kindLabel(kind), code: codeLabel(codes[0].format), codes: codes.length };
   });
 
   // Шаг «Выставить на продажу»: зону и места указывает продавец, номинал — из прайса зоны
@@ -174,14 +187,32 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
       if (seatsProblem) throw new HttpError(400, 'bad_seats', seatsProblem);
       const error = priceError(price, zone.nominal);
       if (error) throw new HttpError(400, 'bad_price', error);
+      const codeCount = check.code_hashes?.length ?? 0;
+      if (quantity > codeCount) {
+        throw new HttpError(
+          400,
+          'quantity_over_codes',
+          codeCount === 1
+            ? 'В файле один билет — продать можно 1. Для нескольких билетов загрузите файл со всеми кодами'
+            : `В файле ${codeCount} билета — продать можно не больше ${codeCount}`,
+        );
+      }
 
       let row;
       try {
-        [row] = await db.query(
-          `INSERT INTO listings (seller_id, event_id, check_id, file_sha256, zone, title, file_kind, nominal, price, quantity)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-          [req.user.id, check.event_id, check.id, check.file_sha256, zone.id, listingTitle(zone, seats), check.file_kind, zone.nominal, price, quantity],
-        );
+        row = await db.tx(async (t) => {
+          const [created] = await t.query(
+            `INSERT INTO listings (seller_id, event_id, check_id, file_sha256, zone, title, file_kind, nominal, price, quantity, code_format)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+            [req.user.id, check.event_id, check.id, check.file_sha256, zone.id, listingTitle(zone, seats), check.file_kind, zone.nominal, price, quantity, check.code_format],
+          );
+          // Уникальный индекс по коду: тот же билет в двух объявлениях — ошибка, даже при гонке
+          await t.query(
+            `INSERT INTO listing_codes (listing_id, code_hash) SELECT $1, unnest($2::text[])`,
+            [created.id, check.code_hashes],
+          );
+          return created;
+        });
       } catch (err) {
         if (isUniqueViolation(err)) {
           throw new HttpError(409, 'duplicate', err.constraint === 'listings_check_id_key'

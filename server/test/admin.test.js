@@ -35,7 +35,7 @@ const eventInput = (over = {}) => ({
 });
 
 async function sell(user, eventId, body) {
-  const { payload, headers } = multipart({ eventId }, files.pdf());
+  const { payload, headers } = await multipart({ eventId }, files.pdf());
   const check = await ctx.app.inject({ method: 'POST', url: '/api/ticket-checks', payload, headers: { ...headers, ...as(user) } });
   if (check.statusCode !== 201) return check;
   return req(user, 'POST', '/api/listings', { checkId: check.json().checkId, quantity: 1, ...body });

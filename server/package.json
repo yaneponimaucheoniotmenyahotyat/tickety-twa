@@ -17,7 +17,13 @@
     "@electric-sql/pglite": "0.5.8",
     "@fastify/cors": "11.3.0",
     "@fastify/multipart": "10.1.2",
+    "@napi-rs/canvas": "1.0.9",
     "fastify": "5.12.5",
-    "pg": "8.23.1"
+    "pdfjs-dist": "6.3.289",
+    "pg": "8.23.1",
+    "zxing-wasm": "3.1.4"
+  },
+  "devDependencies": {
+    "pdf-lib": "1.17.1"
   }
 }
