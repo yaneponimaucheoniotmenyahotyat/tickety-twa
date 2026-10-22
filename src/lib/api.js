@@ -4,8 +4,13 @@ import { tg } from './telegram';
 
 // VITE_API_URL=/ — API на том же адресе, что и приложение (режим phone-api через туннель)
 const RAW = import.meta.env.VITE_API_URL || '';
-const BASE = RAW.replace(/\/$/, '');
-export const apiEnabled = Boolean(RAW);
+// VITE_API_DISCOVERY — бета на GitHub Pages (/dev/): адрес сервера за туннелем меняется,
+// поэтому при запуске читаем его из tunnel.json (пишет scripts/tunnel-bot.mjs).
+// Приложение при этом остаётся на своём постоянном адресе — Telegram не теряет с ним связь
+// (после перехода на чужой домен запрос контакта переставал работать).
+const DISCOVERY = import.meta.env.VITE_API_DISCOVERY || '';
+let BASE = RAW.replace(/\/$/, '');
+export const apiEnabled = Boolean(RAW || DISCOVERY);
 
 export class ApiError extends Error {
   constructor(status, code, message) {
@@ -23,22 +28,48 @@ function authorization() {
   return null;
 }
 
+let discovering = null;
+function serverBase() {
+  if (!DISCOVERY) return Promise.resolve(BASE);
+  discovering ??= fetch(`${DISCOVERY}&t=${Date.now()}`, {
+    cache: 'no-store',
+    headers: { Accept: 'application/vnd.github.raw+json' },
+  })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+    .then(({ url }) => {
+      if (!url) throw new ApiError(0, 'server_off', 'Тестовый сервер выключен — попробуйте позже');
+      BASE = url.replace(/\/$/, '');
+      return BASE;
+    })
+    .catch((e) => {
+      discovering = null; // в следующий раз спросим снова
+      throw e instanceof ApiError ? e : new ApiError(0, 'network', 'Не удалось найти тестовый сервер');
+    });
+  return discovering;
+}
+
 // body — JSON; form — FormData (загрузка файла, Content-Type с boundary ставит браузер)
-export async function api(path, { method = 'GET', body, form } = {}) {
+export async function api(path, { method = 'GET', body, form } = {}, retried = false) {
   if (!apiEnabled) throw new ApiError(0, 'disabled', 'Сервер не настроен');
   const headers = {};
   const auth = authorization();
   if (auth) headers.Authorization = auth;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
+  const base = await serverBase();
   let res;
   try {
-    res = await fetch(`${BASE}${path}`, {
+    res = await fetch(`${base}${path}`, {
       method,
       headers,
       body: form ?? (body === undefined ? undefined : JSON.stringify(body)),
     });
   } catch {
+    // Туннель мог сменить адрес, пока приложение было открыто — узнаём новый и пробуем ещё раз
+    if (DISCOVERY && !retried) {
+      discovering = null;
+      return api(path, { method, body, form }, true);
+    }
     throw new ApiError(0, 'network', 'Нет связи с сервером');
   }
   const data = await res.json().catch(() => ({}));

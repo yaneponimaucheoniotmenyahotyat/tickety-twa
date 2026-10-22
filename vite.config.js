@@ -75,12 +75,21 @@ const previewGzip = () => {
 // Режимы:
 //   tunnel    (npm run dev:tunnel) — HMR-сокет идёт через туннель (wss, порт 443), а не на :5173
 //   phone-api (npm run phone:api)  — сборка ходит в API по тому же адресу (VITE_API_URL=/)
+//   beta-pages (npm run build:pages) — бета для бота на GitHub Pages /dev/, API — через туннель
 export default defineConfig(({ mode }) => ({
   base: './', // TWA часто хостится не в корне домена
   define: {
     __APP_VERSION__: JSON.stringify(version),
     __APP_COMMIT__: JSON.stringify(commit),
     ...(mode === 'phone-api' ? { 'import.meta.env.VITE_API_URL': JSON.stringify('/') } : {}),
+    // Бета на GitHub Pages (/dev/): адрес сервера за туннелем — из tunnel.json в ветке tunnel
+    ...(mode === 'beta-pages'
+      ? {
+          'import.meta.env.VITE_API_DISCOVERY': JSON.stringify(
+            'https://api.github.com/repos/yaneponimaucheoniotmenyahotyat/tickety-twa/contents/tunnel.json?ref=tunnel',
+          ),
+        }
+      : {}),
   },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },

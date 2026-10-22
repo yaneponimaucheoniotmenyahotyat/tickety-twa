@@ -10,6 +10,7 @@
     "tunnel:bot": "node --env-file=server/.env scripts/tunnel-bot.mjs",
     "tunnel:cf": "cloudflared tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:5173",
     "build": "vite build",
+    "build:pages": "vite build && vite build --mode beta-pages --outDir dist/dev --emptyOutDir",
     "preview": "vite preview",
     "phone": "vite build && vite preview",
     "phone:api": "vite build --mode phone-api && vite preview --mode phone-api"

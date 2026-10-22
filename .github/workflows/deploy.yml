@@ -1,4 +1,6 @@
-# Каждый push в main собирает приложение и публикует его на GitHub Pages.
+# Каждый push в main собирает приложение и публикует его на GitHub Pages:
+#   /      — демо-версия (без сервера);
+#   /dev/  — бета для бота: та же сборка, но с сервером за туннелем (адрес — из ветки tunnel).
 name: Deploy to GitHub Pages
 
 on:
@@ -27,7 +29,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - run: npm run build:pages
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
