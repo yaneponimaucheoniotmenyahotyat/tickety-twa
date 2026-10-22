@@ -11,10 +11,10 @@ import BottomSheet from '@/components/ui/BottomSheet';
 import Button from '@/components/ui/Button';
 import { addListing, publishListing } from '@/data/listingsStore';
 import { getEvent, getOffersByEvent } from '@/data/mockData';
+import { useEvents } from '@/hooks/useEvents';
 import { apiEnabled, uploadTicket } from '@/lib/api';
 import {
   CHECK_STEPS,
-  eventZones,
   fileKindOf,
   listingTitle,
   runCheckAnimation,
@@ -47,8 +47,9 @@ export default function SellWizardPage() {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState(null);
 
+  useEvents();
   const event = eventId ? getEvent(eventId) : null;
-  const zones = useMemo(() => (eventId ? eventZones(eventId) : []), [eventId]);
+  const zones = event?.zones ?? [];
   const zone = zones.find((z) => z.id === zoneId) ?? null;
   const seatsProblem = zone ? seatsError(zone, seats) : null;
   const n = Number(price) || 0;

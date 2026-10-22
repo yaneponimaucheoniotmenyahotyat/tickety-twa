@@ -10,6 +10,7 @@ import ListingCard from '@/components/sell/ListingCard';
 import Button from '@/components/ui/Button';
 import DemoNotice from '@/components/ui/DemoNotice';
 import { getEvent } from '@/data/mockData';
+import { useEvents } from '@/hooks/useEvents';
 import { refreshListings } from '@/data/listingsStore';
 import { useListings, useListingsError } from '@/hooks/useListings';
 import { haptic } from '@/lib/telegram';
@@ -24,6 +25,7 @@ export default function SellPage() {
   const navigate = useNavigate();
   const listings = useListings();
   const loadError = useListingsError();
+  useEvents(); // карточки объявлений перерисуются, когда придёт каталог
 
   useEffect(() => {
     refreshListings();
@@ -36,6 +38,7 @@ export default function SellPage() {
   // Пока сервер не подтвердил аккаунт — продажу не открываем (fail closed):
   // иначе при обрыве связи кнопка «Выставить билет» была бы доступна без проверки номера
   const accountPending = apiEnabled && account.status !== 'ok';
+  const blocked = account.status === 'ok' && account.user.blocked;
   const needsPhone = account.status === 'ok' && !account.user.phoneVerified;
   const sold = listings.filter((l) => l.status === 'sold').length;
   const atLimit = apiEnabled && sold === 0 && active.length >= NEW_SELLER_ACTIVE_LIMIT;
@@ -91,6 +94,13 @@ export default function SellPage() {
                   Проверяем аккаунт…
                 </p>
               )}
+            </div>
+          ) : blocked ? (
+            <div className="mt-5 rounded-2xl bg-danger-soft p-4">
+              <p className="text-subhead font-semibold text-danger">Продажа для вашего аккаунта закрыта</p>
+              <p className="mt-1 text-footnote text-label-secondary">
+                Модератор ограничил продажу. Если это ошибка — напишите в поддержку.
+              </p>
             </div>
           ) : needsPhone ? (
             // Защита от мошенников: продавать можно только с номером, подтверждённым Telegram

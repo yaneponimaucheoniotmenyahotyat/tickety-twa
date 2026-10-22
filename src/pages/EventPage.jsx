@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useEventsState } from '@/hooks/useEvents';
 import { useListingOffers } from '@/hooks/useListings';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import Icon from '@/components/icons/Icon';
@@ -9,9 +10,10 @@ import OfferCard from '@/components/event/OfferCard';
 import FavoriteButton from '@/components/ui/FavoriteButton';
 import Button from '@/components/ui/Button';
 import DemoNotice from '@/components/ui/DemoNotice';
+import PageLoader from '@/components/ui/PageLoader';
 import SafeDealNotice from '@/components/ui/SafeDealNotice';
 import SegmentedControl from '@/components/ui/SegmentedControl';
-import { ZONES, getEvent, getOffersByEvent } from '@/data/mockData';
+import { getOffersByEvent } from '@/data/mockData';
 import { formatLongDate, formatTime, plural } from '@/lib/format';
 import { openLink } from '@/lib/telegram';
 
@@ -33,7 +35,8 @@ function InfoRow({ icon, title, subtitle, action }) {
 export default function EventPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const event = getEvent(id);
+  const catalog = useEventsState();
+  const event = catalog.events.find((e) => e.id === id);
   const listingOffers = useListingOffers(); // перерисовка, когда пришли объявления с сервера
   const allOffers = useMemo(
     () => (event ? getOffersByEvent(event.id).sort((a, b) => a.price - b.price) : []),
@@ -41,11 +44,21 @@ export default function EventPage() {
   );
   const [zone, setZone] = useState('all');
 
+  if (catalog.status === 'loading') {
+    return (
+      <>
+        <TopBar title="Событие" left={<BackLink label="Поиск" />} />
+        <PageLoader />
+      </>
+    );
+  }
   if (!event) return <Navigate to="/" replace />;
 
+  // Названия зон — из прайса события (в бете их задаёт администратор)
+  const zoneLabel = (z) => event.zones?.find((x) => x.id === z)?.label ?? z;
   const zoneOptions = [
     { value: 'all', label: `Все (${allOffers.length})` },
-    ...[...new Set(allOffers.map((o) => o.zone))].map((z) => ({ value: z, label: ZONES[z] })),
+    ...[...new Set(allOffers.map((o) => o.zone))].map((z) => ({ value: z, label: zoneLabel(z) })),
   ];
   const list = zone === 'all' ? allOffers : allOffers.filter((o) => o.zone === zone);
 
@@ -61,7 +74,7 @@ export default function EventPage() {
           <InfoRow
             icon="calendar"
             title={formatLongDate(event.date)}
-            subtitle={`Начало в ${formatTime(event.date)} (вход с ${event.doorsOpen})`}
+            subtitle={`Начало в ${formatTime(event.date)}${event.doorsOpen ? ` (вход с ${event.doorsOpen})` : ''}`}
           />
           <InfoRow
             icon="pin"

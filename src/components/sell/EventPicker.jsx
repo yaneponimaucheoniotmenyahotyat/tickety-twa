@@ -1,19 +1,20 @@
 import { useMemo, useState } from 'react';
 import Icon from '@/components/icons/Icon';
 import EventCover from '@/components/event/EventCover';
-import { events } from '@/data/mockData';
+import { useEvents } from '@/hooks/useEvents';
 import { formatEventDate } from '@/lib/format';
 
-// Шаг 1: продавать можно только билеты на события партнёров — их список и показываем
+// Шаг 1: продавать можно только на события из каталога — у них есть прайс зон (номинал)
 export default function EventPicker({ selectedId, onSelect }) {
   const [query, setQuery] = useState('');
+  const events = useEvents();
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
     return events
       .filter((e) => new Date(e.date) > Date.now())
       .filter((e) => !q || [e.title, e.venue, e.city].some((s) => s.toLowerCase().includes(q)))
       .sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [query]);
+  }, [query, events]);
 
   return (
     <div className="space-y-3">
@@ -58,7 +59,7 @@ export default function EventPicker({ selectedId, onSelect }) {
         )}
       </div>
       <p className="px-4 text-caption1 text-label-tertiary">
-        Продавать можно билеты на события партнёров Tickety — только их мы можем проверить у организатора.
+        Нет нужного события? Мы добавляем события вручную по официальному прайсу — напишите в поддержку.
       </p>
     </div>
   );

@@ -5,7 +5,8 @@ import Button from '@/components/ui/Button';
 import Chip from '@/components/ui/Chip';
 import RangeSlider from '@/components/ui/RangeSlider';
 import Toggle from '@/components/ui/Toggle';
-import { CATEGORIES, CITIES, PRICE_LIMIT, events, getVenues } from '@/data/mockData';
+import { CATEGORIES, CITIES, PRICE_LIMIT, getVenues } from '@/data/mockData';
+import { getEvents } from '@/data/eventsStore';
 import { AVERAGE_PRICE, DEFAULT_FILTERS, searchEvents } from '@/lib/search';
 import { formatPrice, plural } from '@/lib/format';
 import { haptic } from '@/lib/telegram';
@@ -48,9 +49,9 @@ export default function FiltersSheet({ open, onClose, value, onApply, query }) {
 
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const count = useMemo(() => searchEvents({ query, filters: draft }).length, [query, draft]);
-  const venuesInCity = draft.city ? new Set(events.filter((e) => e.city === draft.city).map((e) => e.venue)).size : getVenues().length;
+  const venuesInCity = draft.city ? new Set(getEvents().filter((e) => e.city === draft.city).map((e) => e.venue)).size : getVenues().length;
   const venueSuggestions = getVenues().filter(
-    (v) => v !== draft.venue && (!draft.city || events.some((e) => e.venue === v && e.city === draft.city)),
+    (v) => v !== draft.venue && (!draft.city || getEvents().some((e) => e.venue === v && e.city === draft.city)),
   );
   const [lo, hi] = draft.price;
 

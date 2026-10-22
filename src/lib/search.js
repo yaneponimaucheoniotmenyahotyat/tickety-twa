@@ -1,4 +1,5 @@
-import { DEMO_MODE, PRICE_LIMIT, events, getOffersByEvent, offers } from '@/data/mockData';
+import { getEvents } from '@/data/eventsStore';
+import { DEMO_MODE, PRICE_LIMIT, getOffersByEvent, offers } from '@/data/mockData';
 
 export const DEFAULT_FILTERS = {
   city: null, // null — все города
@@ -11,7 +12,13 @@ export const DEFAULT_FILTERS = {
 };
 
 export const SORTS = {
-  popularity: { label: 'По популярности', compare: (a, b) => b.event.popularity - a.event.popularity },
+  // У демо-событий — выдуманная популярность, в бете — число предложений
+  popularity: {
+    label: 'По популярности',
+    compare: (a, b) =>
+      (b.event.popularity ?? b.offersCount) - (a.event.popularity ?? a.offersCount) ||
+      new Date(a.event.date) - new Date(b.event.date),
+  },
   price: { label: 'Сначала дешевле', compare: (a, b) => (a.minPrice ?? Infinity) - (b.minPrice ?? Infinity) || 0 },
   date: { label: 'Ближайшие', compare: (a, b) => new Date(a.event.date) - new Date(b.event.date) },
 };
@@ -53,7 +60,7 @@ export function searchEvents({ query = '', filters, sort = 'popularity' }) {
   const q = query.trim().toLowerCase();
   const venue = filters.venue.trim().toLowerCase();
 
-  const results = events.flatMap((event) => {
+  const results = getEvents().flatMap((event) => {
     if (filters.city && event.city !== filters.city) return [];
     if (filters.category !== 'all' && event.category !== filters.category) return [];
     if (venue && !event.venue.toLowerCase().includes(venue)) return [];

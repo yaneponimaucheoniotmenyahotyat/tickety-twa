@@ -1,6 +1,7 @@
-// Данные витрины. События, зоны и демо-лоты — в shared/catalog.js (общие с сервером);
-// здесь — то, что нужно только интерфейсу, и селекторы.
-import { ZONES, events, offers } from '../../shared/catalog.js';
+// Данные витрины. Демо-события и демо-лоты — в shared/catalog.js; в бете события приходят
+// с сервера (eventsStore). Здесь — то, что нужно только интерфейсу, и селекторы.
+import { ZONES, offers } from '../../shared/catalog.js';
+import { getEvents } from './eventsStore';
 import { getListingOffers } from './listingsStore';
 import { apiEnabled } from '@/lib/api';
 
@@ -8,7 +9,7 @@ import { apiEnabled } from '@/lib/api';
 // видны только здесь и всегда с плашкой «Демо». В бете (с сервером) — только настоящие объявления.
 export const DEMO_MODE = !apiEnabled;
 
-export { ZONES, events, offers };
+export { ZONES, offers };
 
 export const CITIES = ['Москва', 'Санкт-Петербург'];
 
@@ -38,11 +39,11 @@ export const RESERVATION_SECONDS = 15 * 60;
 // Лоты витрины: в демо — выдуманные лоты + объявления с устройства; в бете — только объявления с сервера
 const allOffers = () => (DEMO_MODE ? [...offers, ...getListingOffers()] : getListingOffers());
 
-export const getEvent = (id) => events.find((e) => e.id === id);
+export const getEvent = (id) => getEvents().find((e) => e.id === id);
 export const getOffer = (id) => allOffers().find((o) => o.id === id);
 export const getOffersByEvent = (eventId) => allOffers().filter((o) => o.eventId === eventId);
 
 export const getMinPrice = (eventId, list = allOffers()) =>
   Math.min(...list.filter((o) => o.eventId === eventId).map((o) => o.price));
 
-export const getVenues = () => [...new Set(events.map((e) => e.venue))];
+export const getVenues = () => [...new Set(getEvents().map((e) => e.venue))];

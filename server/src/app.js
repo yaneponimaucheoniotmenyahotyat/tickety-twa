@@ -1,7 +1,10 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
-import { HttpError, registerListingRoutes } from './listings.js';
+import { registerAdminRoutes } from './admin.js';
+import { HttpError } from './errors.js';
+import { registerEventRoutes } from './events.js';
+import { registerListingRoutes } from './listings.js';
 import { AuthError, validateContact, validateInitData } from './telegramAuth.js';
 
 // Сборка приложения отдельно от запуска — тесты поднимают его без сети (app.inject)
@@ -16,6 +19,8 @@ export async function buildApp({ config, db, logger = false }) {
 
   await app.register(cors, {
     origin: config.allowedOrigins,
+    // По умолчанию @fastify/cors разрешает только GET, HEAD и POST — без PUT правка события из админки не дойдёт
+    methods: ['GET', 'HEAD', 'POST', 'PUT'],
     allowedHeaders: ['Authorization', 'Content-Type'],
     maxAge: 600,
   });
@@ -62,7 +67,7 @@ export async function buildApp({ config, db, logger = false }) {
          allows_write_to_pm = users.allows_write_to_pm OR EXCLUDED.allows_write_to_pm,
          last_seen_at = now()
        RETURNING id, first_name, last_name, username, photo_url, is_premium, allows_write_to_pm,
-                 phone, phone_verified_at, created_at, last_seen_at, (xmax = 0) AS inserted`,
+                 phone, phone_verified_at, blocked_at, created_at, last_seen_at, (xmax = 0) AS inserted`,
       [
         u.id,
         u.first_name ?? '',
@@ -99,6 +104,9 @@ export async function buildApp({ config, db, logger = false }) {
     allowsWriteToPm: row.allows_write_to_pm,
     phoneVerified: Boolean(row.phone_verified_at),
     phoneMasked: maskPhone(row.phone),
+    blocked: Boolean(row.blocked_at),
+    // Права администратора — из ADMIN_IDS на сервере; через API их не выдать
+    isAdmin: config.adminIds.has(Number(row.id)),
     createdAt: row.created_at,
   });
 
@@ -135,7 +143,7 @@ export async function buildApp({ config, db, logger = false }) {
       const [row] = await db.query(
         `UPDATE users SET phone = $2, phone_verified_at = now() WHERE id = $1
          RETURNING id, first_name, last_name, username, photo_url, is_premium, allows_write_to_pm,
-                   phone, phone_verified_at, created_at`,
+                   phone, phone_verified_at, blocked_at, created_at`,
         [req.user.id, contact.phone],
       );
       await db.query(
@@ -146,7 +154,15 @@ export async function buildApp({ config, db, logger = false }) {
     },
   );
 
+  // Только для ADMIN_IDS: остальным — 403, даже с верной подписью Telegram
+  const requireAdmin = async (req) => {
+    await requireUser(req);
+    if (!config.adminIds.has(Number(req.user.id))) throw new HttpError(403, 'forbidden', 'Нужны права администратора');
+  };
+
+  registerEventRoutes(app, { db });
   registerListingRoutes(app, { db, config, requireUser, optionalUser });
+  registerAdminRoutes(app, { db, requireAdmin });
 
   return app;
 }

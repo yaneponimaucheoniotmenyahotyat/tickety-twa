@@ -19,9 +19,9 @@ const GENERAL_ADMISSION = new Set(['dance', 'fan']);
 const WITH_SECTOR = new Set(['stands']);
 
 // Прайс зон события: [{ id, label, nominal, seated, needsSector }].
-// Сейчас выводится из каталога (максимальный номинал зоны); в бете его заводят в админке
-// по официальному прайсу организатора.
-export function eventZones(eventId) {
+// В бете его заводит администратор (таблица event_zones); здесь — прайс демо-каталога:
+// максимальный номинал зоны среди демо-лотов. Им же заполняет базу `npm run seed:demo`.
+export function catalogZones(eventId) {
   const byZone = new Map();
   for (const o of offers) {
     if (o.eventId !== eventId) continue;
@@ -36,7 +36,7 @@ export function eventZones(eventId) {
   }));
 }
 
-export const findZone = (eventId, zoneId) => eventZones(eventId).find((z) => z.id === zoneId) ?? null;
+export const findZone = (zones, zoneId) => zones.find((z) => z.id === zoneId) ?? null;
 
 // Ошибка в местах или null. Для свободной рассадки места не нужны.
 export function seatsError(zone, { sector = '', row = '', seat = '' } = {}) {

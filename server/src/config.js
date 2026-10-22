@@ -28,6 +28,8 @@ export function loadConfig(env = process.env) {
       : DEFAULT_ORIGINS,
     initDataMaxAge: Number(env.INIT_DATA_MAX_AGE) || 86_400,
     allowDevAuth,
+    // Администраторы — Telegram id через запятую
+    adminIds: new Set((env.ADMIN_IDS ?? '').split(',').map((s) => Number(s.trim())).filter((n) => Number.isSafeInteger(n) && n > 0)),
     // Куда сохранять файлы билетов. 'off' — не сохранять (тесты)
     uploadDir:
       env.UPLOAD_DIR === 'off' ? null : env.UPLOAD_DIR || fileURLToPath(new URL('../.data/uploads', import.meta.url)),

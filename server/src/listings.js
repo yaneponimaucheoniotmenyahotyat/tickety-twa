@@ -1,7 +1,6 @@
 // Объявления: загрузка и проверка билета, создание, списки, снятие с продажи.
 // Что сервер проверяет на самом деле: формат файла (по сигнатуре), дубли файла (SHA-256),
 // подтверждённый номер продавца, цену ≤ номинала зоны. Штрихкод с организатором не сверяется.
-import { events } from '../../shared/catalog.js';
 import {
   MAX_FILE_MB,
   MAX_QUANTITY,
@@ -11,30 +10,20 @@ import {
   priceError,
   seatsError,
 } from '../../shared/listingRules.js';
+import { HttpError } from './errors.js';
+import { upcomingEvent } from './events.js';
 import { detectKind, kindLabel, sha256, storeFile } from './ticketFiles.js';
-
-export class HttpError extends Error {
-  constructor(status, code, message) {
-    super(message);
-    this.status = status;
-    this.code = code;
-  }
-}
 
 const UUID = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
 const isUniqueViolation = (err) => err?.code === '23505';
-
-function upcomingEvent(eventId) {
-  const event = events.find((e) => e.id === eventId);
-  if (!event) throw new HttpError(404, 'event_not_found', 'Такого события нет');
-  if (new Date(event.date) <= new Date()) throw new HttpError(400, 'event_past', 'Событие уже прошло');
-  return event;
-}
 
 // Допуск к продаже — защита от мошенников без юрлица:
 //   • номер телефона подтверждён подписью Telegram (сим-карты в РФ — по паспорту);
 //   • пока нет завершённых продаж — не больше NEW_SELLER_ACTIVE_LIMIT активных объявлений.
 async function assertCanSell(db, user) {
+  if (user.blocked_at) {
+    throw new HttpError(403, 'blocked', 'Продажа для вашего аккаунта закрыта. Если это ошибка — напишите в поддержку');
+  }
   if (!user.phone_verified_at) {
     throw new HttpError(403, 'phone_required', 'Чтобы продавать, подтвердите номер телефона');
   }
@@ -54,10 +43,10 @@ async function assertCanSell(db, user) {
 }
 
 // «Алексей М.» — имя и первая буква фамилии, как у демо-продавцов
-const sellerName = (row) => [row.first_name, row.last_name ? `${row.last_name[0]}.` : null].filter(Boolean).join(' ');
+export const sellerName = (row) => [row.first_name, row.last_name ? `${row.last_name[0]}.` : null].filter(Boolean).join(' ');
 
 // Строка БД → лот в том же формате, что демо-лоты витрины
-function toOffer(row, viewerId) {
+export function toOffer(row, viewerId) {
   return {
     id: row.id,
     eventId: row.event_id,
@@ -79,17 +68,19 @@ function toOffer(row, viewerId) {
     },
     own: viewerId != null && Number(row.seller_id) === Number(viewerId),
     status: row.status,
+    // Причину снятия модератором видит продавец в «Моих объявлениях»
+    removedReason: row.status === 'removed' ? row.removed_reason : undefined,
     createdAt: row.created_at,
   };
 }
 
-const LISTING_SELECT = `
+export const LISTING_SELECT = `
   SELECT l.*, u.first_name, u.last_name, u.phone_verified_at,
          (SELECT count(*) FROM listings s WHERE s.seller_id = l.seller_id AND s.status = 'sold') AS seller_sales
   FROM listings l JOIN users u ON u.id = l.seller_id`;
 
 export function registerListingRoutes(app, { db, config, requireUser, optionalUser }) {
-  // Все активные объявления — витрина подмешивает их к демо-лотам
+  // Все активные объявления — для витрины и страниц событий
   app.get('/api/listings', { preHandler: optionalUser }, async (req) => {
     const rows = await db.query(`${LISTING_SELECT} WHERE l.status = 'active' ORDER BY l.created_at DESC LIMIT 500`);
     return { listings: rows.map((r) => toOffer(r, req.user?.id)) };
@@ -122,7 +113,7 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
       throw err;
     }
 
-    const event = upcomingEvent(part.fields.eventId?.value);
+    const event = await upcomingEvent(db, part.fields.eventId?.value);
     const kind = detectKind(buf);
     if (!kind) throw new HttpError(415, 'unsupported_file', 'Нужен PDF или фото билета (JPG, PNG, HEIC)');
 
@@ -174,9 +165,9 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
       await assertCanSell(db, req.user);
       const [check] = await db.query(`SELECT * FROM ticket_checks WHERE id = $1 AND user_id = $2`, [checkId, req.user.id]);
       if (!check) throw new HttpError(404, 'check_not_found', 'Проверка билета не найдена — загрузите файл заново');
-      upcomingEvent(check.event_id);
+      const event = await upcomingEvent(db, check.event_id);
 
-      const zone = findZone(check.event_id, req.body.zone);
+      const zone = findZone(event.zones, req.body.zone);
       if (!zone) throw new HttpError(400, 'bad_zone', 'Такой зоны на этом событии нет');
       const seats = zone.seated ? { sector: req.body.sector ?? '', row: req.body.row ?? '', seat: req.body.seat ?? '' } : {};
       const seatsProblem = seatsError(zone, seats);

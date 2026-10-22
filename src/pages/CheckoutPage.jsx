@@ -12,6 +12,9 @@ import DemoNotice from '@/components/ui/DemoNotice';
 import { DEMO_MODE, PAYMENT_METHODS, RESERVATION_SECONDS, SERVICE_FEE_PERCENT, getEvent, getOffer } from '@/data/mockData';
 import { useCountdown } from '@/hooks/useCountdown';
 import { addTicket } from '@/hooks/useTickets';
+import PageLoader from '@/components/ui/PageLoader';
+import { useEventsState } from '@/hooks/useEvents';
+import { useListingOffers } from '@/hooks/useListings';
 import { formatPrice } from '@/lib/format';
 import { createTicket } from '@/lib/tickets';
 import { haptic, setClosingConfirmation } from '@/lib/telegram';
@@ -21,6 +24,8 @@ const PAYMENT_DELAY_MS = 1400; // имитация ответа банка
 export default function CheckoutPage() {
   const { offerId } = useParams();
   const navigate = useNavigate();
+  const catalog = useEventsState(); // перерисовка, когда каталог пришёл с сервера
+  useListingOffers();
   const offer = getOffer(offerId);
   const event = offer && getEvent(offer.eventId);
 
@@ -43,6 +48,7 @@ export default function CheckoutPage() {
   const payTimer = useRef();
   useEffect(() => () => clearTimeout(payTimer.current), []);
 
+  if (catalog.status === 'loading' && !event) return <PageLoader />;
   if (!offer || !event) return <Navigate to="/" replace />;
   // Свой билет купить нельзя (прямой переход по ссылке /checkout/<id своего объявления>)
   if (offer.own) return <Navigate to={`/event/${event.id}`} replace />;

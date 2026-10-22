@@ -87,6 +87,12 @@ export function openLink(url) {
   else window.open(url, '_blank', 'noopener');
 }
 
+// Ссылки t.me (профиль пользователя) — внутри Telegram, без внешнего браузера
+export function openTelegramLink(url) {
+  if (isTelegram && tg.openTelegramLink) tg.openTelegramLink(url);
+  else window.open(url, '_blank', 'noopener');
+}
+
 export function getUser() {
   return tg?.initDataUnsafe?.user ?? null;
 }

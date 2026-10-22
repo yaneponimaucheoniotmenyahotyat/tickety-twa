@@ -6,7 +6,7 @@ import { MAX_FILE_MB } from '../../shared/listingRules.js';
 import { apiEnabled } from './api';
 
 export { MAX_FILE_MB };
-export { eventZones, findZone, listingTitle, MIN_PRICE, priceError, seatsError } from '../../shared/listingRules.js';
+export { findZone, listingTitle, MIN_PRICE, priceError, seatsError } from '../../shared/listingRules.js';
 
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 const ALLOWED_EXT = /\.(pdf|jpe?g|png|webp|heic|heif)$/i;

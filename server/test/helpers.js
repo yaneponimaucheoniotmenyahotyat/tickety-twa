@@ -3,15 +3,17 @@ import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { openDb } from '../src/db.js';
 import { migrate } from '../src/migrate.js';
+import { seedCatalog } from '../src/seed.js';
 import { signInitData } from '../src/telegramAuth.js';
 
 export const TOKEN = '123456:TEST-token-not-real';
 
-// Приложение на чистой базе в памяти, файлы на диск не пишутся
-export async function setup() {
+// Приложение на чистой базе в памяти с демо-событиями, файлы на диск не пишутся
+export async function setup({ seed = true } = {}) {
   const db = await openDb({ dataDir: 'memory://' });
   await migrate(db);
-  const app = await buildApp({ config: loadConfig({ BOT_TOKEN: TOKEN, UPLOAD_DIR: 'off' }), db });
+  if (seed) await seedCatalog(db);
+  const app = await buildApp({ config: loadConfig({ BOT_TOKEN: TOKEN, UPLOAD_DIR: 'off', ADMIN_IDS: String(ADMIN.id) }), db });
   return { app, db, close: async () => (await app.close(), await db.close()) };
 }
 
@@ -29,6 +31,8 @@ export const users = {
   alice: { id: 1001, first_name: 'Алиса', last_name: 'Иванова' },
   bob: { id: 1002, first_name: 'Борис' },
 };
+// Администратор — из ADMIN_IDS конфигурации тестов
+export const ADMIN = { id: 9001, first_name: 'Админ' };
 
 // Настоящие сигнатуры форматов + случайный хвост, чтобы каждый файл был «другим билетом»
 export const files = {

@@ -49,6 +49,18 @@ export async function api(path, { method = 'GET', body, form } = {}) {
 export const getMe = () => api('/api/me');
 export const verifyPhone = (response) => api('/api/me/phone', { method: 'POST', body: { response } });
 
+// ---- События ----
+export const fetchEvents = () => api('/api/events');
+
+// ---- Админка ----
+export const adminEvents = () => api('/api/admin/events');
+export const adminCreateEvent = (body) => api('/api/admin/events', { method: 'POST', body });
+export const adminUpdateEvent = (id, body) => api(`/api/admin/events/${id}`, { method: 'PUT', body });
+export const adminListings = (status = 'active') => api(`/api/admin/listings?status=${status}`);
+export const adminRemoveListing = (id, reason) => api(`/api/admin/listings/${id}/remove`, { method: 'POST', body: { reason } });
+export const adminBlockUser = (id, reason) => api(`/api/admin/users/${id}/block`, { method: 'POST', body: { reason } });
+export const adminUnblockUser = (id) => api(`/api/admin/users/${id}/unblock`, { method: 'POST' });
+
 // ---- Объявления ----
 export const fetchListings = () => api('/api/listings');
 export const fetchMyListings = () => api('/api/me/listings');

@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useTelegramBackButton } from './hooks/useTelegramBackButton';
+import { refreshEvents } from './data/eventsStore';
 import { refreshListings } from './data/listingsStore';
 import TabBar from './components/layout/TabBar';
 import HomePage from './pages/HomePage';
@@ -11,17 +12,20 @@ import TicketPage from './pages/TicketPage';
 import ProfilePage from './pages/ProfilePage';
 import SellPage from './pages/SellPage';
 import SellWizardPage from './pages/SellWizardPage';
+import AdminPage from './pages/admin/AdminPage';
+import AdminEventPage from './pages/admin/AdminEventPage';
 
 // Экраны со своей кнопкой действия внизу — таб-бар бы её перекрывал
-const NO_TAB_BAR = ['/checkout', '/sell/new'];
+const NO_TAB_BAR = ['/checkout', '/sell/new', '/admin/events/'];
 
 export default function App() {
   useTelegramBackButton();
   const { pathname } = useLocation();
   const withTabBar = !NO_TAB_BAR.some((p) => pathname.startsWith(p));
 
-  // Объявления с сервера — один раз при запуске (без сервера ничего не делает)
+  // События и объявления с сервера — один раз при запуске (без сервера ничего не делает)
   useEffect(() => {
+    refreshEvents();
     refreshListings();
   }, []);
 
@@ -41,6 +45,8 @@ export default function App() {
         <Route path="/sell" element={<SellPage />} />
         <Route path="/sell/new" element={<SellWizardPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/events/:id" element={<AdminEventPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {withTabBar && <TabBar />}

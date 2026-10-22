@@ -1,12 +1,12 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findZone } from '../../shared/listingRules.js';
+import { catalogZones, findZone } from '../../shared/listingRules.js';
 import { files, multipart, setup, tma, users, verifyPhone } from './helpers.js';
 
 // Событие из shared/catalog.js с датой в будущем (14.02.2027)
 const EVENT = 'mumiy-troll-vk';
-const DANCE = findZone(EVENT, 'dance'); // свободная рассадка
-const STANDS = findZone(EVENT, 'stands'); // нужны сектор, ряд, место
+const DANCE = findZone(catalogZones(EVENT), 'dance'); // свободная рассадка
+const STANDS = findZone(catalogZones(EVENT), 'stands'); // нужны сектор, ряд, место
 let ctx;
 
 before(async () => {

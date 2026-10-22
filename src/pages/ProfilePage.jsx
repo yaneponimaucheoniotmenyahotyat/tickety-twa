@@ -10,7 +10,7 @@ import Toggle from '@/components/ui/Toggle';
 import Button from '@/components/ui/Button';
 import { confirmPhone } from '@/data/accountStore';
 import { clearListings } from '@/data/listingsStore';
-import { events } from '@/data/mockData';
+import { useEvents } from '@/hooks/useEvents';
 import { clearFavorites, useFavorites } from '@/hooks/useFavorites';
 import { useServerAccount } from '@/hooks/useServerAccount';
 import { clearTickets, useTickets } from '@/hooks/useTickets';
@@ -83,6 +83,7 @@ export default function ProfilePage() {
   };
 
   const savings = useMemo(() => tickets.reduce((sum, t) => sum + ticketSavings(t), 0), [tickets]);
+  const events = useEvents();
   const favoriteEvents = events.filter((e) => favorites.has(e.id));
   const name = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') : 'Гость';
 
@@ -242,6 +243,15 @@ export default function ProfilePage() {
                   </Button>
                 )
               }
+            />
+          )}
+          {account.status === 'ok' && account.user.isAdmin && (
+            <ListRow
+              icon="tune"
+              iconClass="bg-brand text-white"
+              title="Админка"
+              subtitle="События, прайс зон, модерация объявлений"
+              onClick={() => navigate('/admin')}
             />
           )}
           <ListRow

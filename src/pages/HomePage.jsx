@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'react';
+import { useEventsState } from '@/hooks/useEvents';
 import { useListingOffers } from '@/hooks/useListings';
 import Icon from '@/components/icons/Icon';
 import { AvatarButton } from '@/components/layout/TopBar';
 import EventCard from '@/components/event/EventCard';
 import FiltersSheet from '@/components/home/FiltersSheet';
 import SearchBar from '@/components/home/SearchBar';
+import Button from '@/components/ui/Button';
 import Chip from '@/components/ui/Chip';
 import DemoNotice from '@/components/ui/DemoNotice';
+import PageLoader from '@/components/ui/PageLoader';
 import SafeDealNotice from '@/components/ui/SafeDealNotice';
+import { refreshEvents } from '@/data/eventsStore';
 import { CATEGORIES } from '@/data/mockData';
 import { DEFAULT_FILTERS, SORTS, countActiveFilters, searchEvents } from '@/lib/search';
 import { haptic } from '@/lib/telegram';
@@ -22,9 +26,10 @@ export default function HomePage() {
 
   // Объявления с сервера приходят асинхронно — пересчитываем выдачу, когда они обновились
   const listingOffers = useListingOffers();
+  const catalog = useEventsState();
   const results = useMemo(
     () => searchEvents({ query, filters, sort }),
-    [query, filters, sort, listingOffers],
+    [query, filters, sort, listingOffers, catalog.events],
   );
 
   const cycleSort = () => {
@@ -78,7 +83,25 @@ export default function HomePage() {
           </div>
         </div>
 
-        {results.length > 0 ? (
+        {catalog.status === 'loading' ? (
+          <PageLoader label="Загружаем события…" />
+        ) : catalog.status === 'error' ? (
+          <div className="card flex flex-col items-center px-6 py-10 text-center">
+            <p className="text-headline text-danger">Не удалось загрузить события</p>
+            <p className="mt-1 text-subhead text-label-secondary">{catalog.error?.message}</p>
+            <Button className="mt-4" variant="plain" onClick={refreshEvents}>
+              Повторить
+            </Button>
+          </div>
+        ) : catalog.events.length === 0 ? (
+          <div className="card flex flex-col items-center px-6 py-10 text-center">
+            <Icon name="calendar" className="h-8 w-8 text-label-tertiary" />
+            <p className="mt-3 text-headline">Скоро здесь появятся события</p>
+            <p className="mt-1 text-subhead text-label-secondary">
+              Мы добавляем события вручную, с официальным прайсом организатора
+            </p>
+          </div>
+        ) : results.length > 0 ? (
           <div className="space-y-4">
             {results.map((r) => (
               <EventCard key={r.event.id} event={r.event} minPrice={r.minPrice} allVerified={r.allVerified} />
