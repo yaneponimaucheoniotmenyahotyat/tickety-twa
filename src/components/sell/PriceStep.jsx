@@ -1,5 +1,6 @@
 import Icon from '@/components/icons/Icon';
 import Chip from '@/components/ui/Chip';
+import { DEMO_MODE } from '@/data/mockData';
 import { formatPrice, plural } from '@/lib/format';
 import { MIN_PRICE } from '@/lib/ticketCheck';
 
@@ -77,9 +78,11 @@ export default function PriceStep({ nominal, price, onPrice, quantity, market })
         </div>
         <div className="flex items-center justify-between px-4 py-3">
           <span>
-            <span className="block text-headline">Вы получите</span>
+            <span className="block text-headline">Сумма лота</span>
             <span className="block text-caption1 text-label-tertiary">
-              {quantity > 1 ? `${quantity} × ${formatPrice(n)}, ` : ''}после прохода покупателя
+              {[quantity > 1 && `${quantity} × ${formatPrice(n)}`, DEMO_MODE && 'после прохода покупателя']
+                .filter(Boolean)
+                .join(', ')}
             </span>
           </span>
           <span className="text-title2 tabular-nums text-brand">{formatPrice(tooHigh ? 0 : n * quantity)}</span>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import Icon from '@/components/icons/Icon';
 import Badge from '@/components/ui/Badge';
+import Chip from '@/components/ui/Chip';
 import { CHECK_STEPS, MAX_FILE_MB } from '@/lib/ticketCheck';
 import { formatPrice } from '@/lib/format';
 
@@ -30,8 +31,20 @@ const SeatInput = ({ label, value, onChange }) => (
   </label>
 );
 
-// Шаг 2: загрузка файла → анимированная «проверка ИИ» → распознанные данные
-export default function TicketUploadStep({ file, check, details, quantity, onFile, onDetails, onQuantity }) {
+// Шаг 2: загрузка файла → проверка формата (и дублей на сервере) → продавец указывает зону и места
+export default function TicketUploadStep({
+  file,
+  check,
+  zones,
+  zone,
+  seats,
+  seatsProblem,
+  quantity,
+  onFile,
+  onZone,
+  onSeats,
+  onQuantity,
+}) {
   const preview = useMemo(() => (file && file.type.startsWith('image/') && !/hei[cf]/i.test(file.type) ? URL.createObjectURL(file) : null), [file]);
   useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview]);
 
@@ -76,8 +89,8 @@ export default function TicketUploadStep({ file, check, details, quantity, onFil
       {(check.status === 'running' || check.status === 'done') && (
         <section className="card p-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-headline">Проверка Tickety AI</h2>
-            {check.status === 'done' && <Badge tone="success" icon="verified">Подлинный</Badge>}
+            <h2 className="text-headline">Проверка файла</h2>
+            {check.status === 'done' && <Badge tone="success" icon="check">{check.fileKind}</Badge>}
           </div>
           <ul className="mt-3 space-y-2.5">
             {CHECK_STEPS.map((label, i) => {
@@ -101,33 +114,43 @@ export default function TicketUploadStep({ file, check, details, quantity, onFil
         </section>
       )}
 
-      {check.status === 'done' && details && (
+      {check.status === 'done' && (
         <section className="card space-y-4 p-4">
           <div>
-            <h2 className="text-headline">Что мы распознали</h2>
-            <p className="text-footnote text-label-secondary">Поправьте места, если ИИ ошибся</p>
+            <h2 className="text-headline">Где ваши места</h2>
+            <p className="text-footnote text-label-secondary">
+              Укажите как на билете — покупатель увидит это в объявлении
+            </p>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-subhead text-label-secondary">Зона</span>
-            <span className="text-subhead font-semibold">{details.zoneLabel}</span>
+
+          <div className="flex flex-wrap gap-2">
+            {zones.map((z) => (
+              <Chip key={z.id} size="sm" variant="brand" active={zone?.id === z.id} onClick={() => onZone(z.id)}>
+                {z.label} · {formatPrice(z.nominal)}
+              </Chip>
+            ))}
           </div>
-          {details.seated && (
-            <div className="flex gap-2">
-              {details.zone === 'stands' && (
-                <SeatInput label="Сектор" value={details.sector} onChange={(sector) => onDetails({ sector })} />
-              )}
-              <SeatInput label="Ряд" value={details.row} onChange={(row) => onDetails({ row })} />
-              <SeatInput label="Место" value={details.seat} onChange={(seat) => onDetails({ seat })} />
+
+          {zone?.seated && (
+            <>
+              <div className="flex gap-2">
+                {zone.needsSector && (
+                  <SeatInput label="Сектор" value={seats.sector} onChange={(sector) => onSeats({ sector })} />
+                )}
+                <SeatInput label="Ряд" value={seats.row} onChange={(row) => onSeats({ row })} />
+                <SeatInput label="Место" value={seats.seat} onChange={(seat) => onSeats({ seat })} />
+              </div>
+              {seatsProblem && <p className="text-footnote text-label-secondary">{seatsProblem}</p>}
+            </>
+          )}
+
+          {zone && (
+            <div className="flex items-center justify-between">
+              <span className="text-subhead text-label-secondary">Номинал зоны</span>
+              <span className="text-subhead font-semibold">{formatPrice(zone.nominal)}</span>
             </div>
           )}
-          <div className="flex items-center justify-between">
-            <span className="text-subhead text-label-secondary">Номинал (от организатора)</span>
-            <span className="text-subhead font-semibold">{formatPrice(details.nominal)}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-subhead text-label-secondary">Штрихкод</span>
-            <span className="font-mono text-subhead">••••{details.barcode.slice(-4)}</span>
-          </div>
+
           <div className="flex items-center justify-between border-t border-separator pt-4">
             <span>
               <span className="block text-subhead">Билетов в лоте</span>

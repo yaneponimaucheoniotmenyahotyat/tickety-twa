@@ -1,5 +1,9 @@
 import { useSyncExternalStore } from 'react';
+import { DEMO_MODE } from '@/data/mockData';
 import { DEMO_TICKETS } from '@/lib/tickets';
+
+// Демо-билет (Земфира) — только в демо-режиме
+const DEMO = DEMO_MODE ? DEMO_TICKETS : [];
 
 // MVP: купленные билеты живут в localStorage (как и избранное).
 // С бэкендом это станет запросом GET /me/tickets.
@@ -16,11 +20,11 @@ function read() {
 }
 
 let purchased = read();
-let all = [...purchased, ...DEMO_TICKETS];
+let all = [...purchased, ...DEMO];
 
 function save(next) {
   purchased = next;
-  all = [...purchased, ...DEMO_TICKETS];
+  all = [...purchased, ...DEMO];
   try {
     localStorage.setItem(KEY, JSON.stringify(purchased));
   } catch {

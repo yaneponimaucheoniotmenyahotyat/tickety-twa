@@ -6,6 +6,7 @@ import EventCard from '@/components/event/EventCard';
 import FiltersSheet from '@/components/home/FiltersSheet';
 import SearchBar from '@/components/home/SearchBar';
 import Chip from '@/components/ui/Chip';
+import DemoNotice from '@/components/ui/DemoNotice';
 import SafeDealNotice from '@/components/ui/SafeDealNotice';
 import { CATEGORIES } from '@/data/mockData';
 import { DEFAULT_FILTERS, SORTS, countActiveFilters, searchEvents } from '@/lib/search';
@@ -41,6 +42,7 @@ export default function HomePage() {
       </header>
 
       <main className="px-gutter pb-6">
+        <DemoNotice className="mb-3" />
         <SearchBar
           value={query}
           onChange={setQuery}

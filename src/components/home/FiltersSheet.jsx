@@ -169,7 +169,9 @@ export default function FiltersSheet({ open, onClose, value, onApply, query }) {
         <RangeSlider max={PRICE_LIMIT} step={100} value={draft.price} onChange={(price) => set({ price })} />
         <div className="mt-3 flex justify-between text-caption1 text-label-tertiary">
           <span>0 ₽</span>
-          <span className="text-footnote text-label-secondary">Средняя: {formatPrice(AVERAGE_PRICE)}</span>
+          {AVERAGE_PRICE != null && (
+            <span className="text-footnote text-label-secondary">Средняя: {formatPrice(AVERAGE_PRICE)}</span>
+          )}
           <span>20 000+ ₽</span>
         </div>
       </div>
@@ -179,9 +181,8 @@ export default function FiltersSheet({ open, onClose, value, onApply, query }) {
         <ToggleRow
           icon="shield-check"
           iconClass="bg-success-soft text-success"
-          title="Проверены ИИ"
-          badge="Гарантия"
-          subtitle="Штрихкод и PDF валидированы"
+          title="Подтверждённые продавцы"
+          subtitle="Номер телефона подтверждён в Telegram"
           checked={draft.aiVerified}
           onChange={(aiVerified) => set({ aiVerified })}
         />

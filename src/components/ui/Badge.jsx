@@ -2,8 +2,8 @@ import Icon from '@/components/icons/Icon';
 
 const TONES = {
   danger: 'bg-danger text-white',                   // «Осталось 14 билетов»
-  success: 'bg-success-soft text-success',          // «Проверен ИИ», «0%»
-  mint: 'bg-success-mint/30 text-success',          // «Проверено Tickety AI»
+  success: 'bg-success-soft text-success',          // «Продавец подтверждён», «0%»
+  mint: 'bg-success-mint/30 text-success',          // «Продавец подтверждён» на оплате
   brand: 'bg-brand-soft text-brand-ink',            // «Apple Wallet + PDF», «+3% Плюс»
   neutral: 'bg-fill text-label',                    // «Сектор A4, Ряд 7»
   // Поверх фото — фиксированные светлые цвета, не зависят от темы

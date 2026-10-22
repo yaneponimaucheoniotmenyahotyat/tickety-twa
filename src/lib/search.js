@@ -1,4 +1,4 @@
-import { PRICE_LIMIT, events, getOffersByEvent, offers } from '@/data/mockData';
+import { DEMO_MODE, PRICE_LIMIT, events, getOffersByEvent, offers } from '@/data/mockData';
 
 export const DEFAULT_FILTERS = {
   city: null, // null — все города
@@ -12,7 +12,7 @@ export const DEFAULT_FILTERS = {
 
 export const SORTS = {
   popularity: { label: 'По популярности', compare: (a, b) => b.event.popularity - a.event.popularity },
-  price: { label: 'Сначала дешевле', compare: (a, b) => a.minPrice - b.minPrice },
+  price: { label: 'Сначала дешевле', compare: (a, b) => (a.minPrice ?? Infinity) - (b.minPrice ?? Infinity) || 0 },
   date: { label: 'Ближайшие', compare: (a, b) => new Date(a.event.date) - new Date(b.event.date) },
 };
 
@@ -29,6 +29,9 @@ export function countActiveFilters(f) {
   ].filter(Boolean).length;
 }
 
+const offerFiltersActive = (f) =>
+  f.price[0] !== DEFAULT_FILTERS.price[0] || f.price[1] !== DEFAULT_FILTERS.price[1] || f.aiVerified || f.eTicket || f.together;
+
 const offerMatches = (o, f) => {
   const [lo, hi] = f.price;
   const max = hi >= PRICE_LIMIT ? Infinity : hi; // «20 000+ ₽» — без верхней границы
@@ -42,7 +45,9 @@ const offerMatches = (o, f) => {
   );
 };
 
-// Событие попадает в выдачу, если у него есть хотя бы одно подходящее предложение;
+// С фильтрами по предложениям (цена, проверенные продавцы, электронный вход, места рядом)
+// событие попадает в выдачу, только если есть подходящее предложение. Без них — показываем
+// и события без предложений: в бете их поначалу большинство, пустая витрина хуже.
 // «от N ₽» считается только по подходящим предложениям.
 export function searchEvents({ query = '', filters, sort = 'popularity' }) {
   const q = query.trim().toLowerCase();
@@ -56,13 +61,13 @@ export function searchEvents({ query = '', filters, sort = 'popularity' }) {
       return [];
     }
     const matching = getOffersByEvent(event.id).filter((o) => offerMatches(o, filters));
-    if (!matching.length) return [];
+    if (!matching.length && offerFiltersActive(filters)) return [];
     return [
       {
         event,
-        minPrice: Math.min(...matching.map((o) => o.price)),
+        minPrice: matching.length ? Math.min(...matching.map((o) => o.price)) : null,
         offersCount: matching.length,
-        allVerified: matching.every((o) => o.verified),
+        allVerified: matching.length > 0 && matching.every((o) => o.verified),
       },
     ];
   });
@@ -70,5 +75,7 @@ export function searchEvents({ query = '', filters, sort = 'popularity' }) {
   return results.sort(SORTS[sort].compare);
 }
 
-export const AVERAGE_PRICE =
-  Math.round(offers.reduce((sum, o) => sum + o.price, 0) / offers.length / 100) * 100;
+// Средняя цена демо-лотов — подсказка в фильтре; в бете не показываем (выборка пока мала)
+export const AVERAGE_PRICE = DEMO_MODE
+  ? Math.round(offers.reduce((sum, o) => sum + o.price, 0) / offers.length / 100) * 100
+  : null;

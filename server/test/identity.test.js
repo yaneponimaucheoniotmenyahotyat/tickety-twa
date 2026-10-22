@@ -58,11 +58,11 @@ test('новый продавец — не больше 3 активных об�
   await verifyPhone(ctx.app, eve);
   const ids = [];
   for (let i = 0; i < 3; i++) {
-    const { checkId, details } = (await upload(eve)).json();
+    const { checkId } = (await upload(eve)).json();
     const res = await ctx.app.inject({
       method: 'POST',
       url: '/api/listings',
-      payload: { checkId, price: details.nominal, quantity: 1 },
+      payload: { checkId, zone: 'dance', price: 1000, quantity: 1 },
       headers: { authorization: tma(eve) },
     });
     assert.equal(res.statusCode, 201);

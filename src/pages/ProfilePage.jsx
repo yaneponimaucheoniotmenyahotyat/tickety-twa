@@ -61,7 +61,7 @@ const Stat = ({ value, label }) => (
 
 const SAFE_DEAL_STEPS = [
   ['Оплата', 'Деньги замораживаются на эскроу-счёте — продавец их пока не получает.'],
-  ['Переоформление', 'Продавец передаёт билет, Tickety проверяет штрихкод и PDF.'],
+  ['Переоформление', 'Продавец передаёт билет покупателю.'],
   ['Проход', 'Вы показываете QR-код на входе, контролёр его сканирует.'],
   ['Выплата', 'Только после вашего прохода деньги уходят продавцу. Не прошли — вернём всю сумму.'],
 ];
@@ -150,7 +150,7 @@ export default function ProfilePage() {
           <span className="min-w-0 flex-1">
             <span className="block text-headline">Продать лишний билет</span>
             <span className="block text-footnote text-label-secondary">
-              Цена не выше номинала, деньги — сразу после прохода покупателя
+              Цена не выше номинала, только продавцы с подтверждённым номером
             </span>
           </span>
           <Icon name="chevron-right" className="h-5 w-5 shrink-0 text-label-tertiary" />

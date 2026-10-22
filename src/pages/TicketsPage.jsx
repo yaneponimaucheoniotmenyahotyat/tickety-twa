@@ -52,7 +52,7 @@ export default function TicketsPage() {
               {tab === 'upcoming' ? 'Здесь появятся купленные билеты' : 'Прошедших событий пока нет'}
             </p>
             <p className="mt-1 text-subhead text-label-secondary">
-              Проверенные билеты по цене не выше номинала — с гарантией прохода
+              Билеты по цене не выше номинала от продавцов с подтверждённым номером
             </p>
             {tab === 'upcoming' && (
               <Button className="mt-5" iconRight="chevron-right" onClick={() => navigate('/')}>

@@ -8,6 +8,7 @@ import Icon from '@/components/icons/Icon';
 import TopBar from '@/components/layout/TopBar';
 import ListingCard from '@/components/sell/ListingCard';
 import Button from '@/components/ui/Button';
+import DemoNotice from '@/components/ui/DemoNotice';
 import { getEvent } from '@/data/mockData';
 import { refreshListings } from '@/data/listingsStore';
 import { useListings, useListingsError } from '@/hooks/useListings';
@@ -15,8 +16,8 @@ import { haptic } from '@/lib/telegram';
 
 const RULES = [
   { icon: 'shield-check', title: 'Цена не выше номинала', text: 'Спекуляций нет — покупатели доверяют и покупают быстрее' },
-  { icon: 'verified', title: 'Проверка ИИ за секунды', text: 'Загрузите PDF или фото — штрихкод сверим с организатором' },
-  { icon: 'lock', title: 'Деньги после прохода', text: 'Оплата ждёт на эскроу-счёте и приходит вам по СБП' },
+  { icon: 'verified', title: 'Подтверждённые продавцы', text: 'Продавать можно только с номером, подтверждённым в Telegram' },
+  { icon: 'lock', title: 'Безопасная сделка — скоро', text: 'Оплата через Tickety с удержанием денег до прохода появится после беты' },
 ];
 
 export default function SellPage() {
@@ -55,6 +56,7 @@ export default function SellPage() {
     <>
       <TopBar title="Продать" />
       <main className="space-y-3 px-gutter pb-6 pt-3">
+        <DemoNotice>Объявления хранятся только на этом устройстве — другие их не увидят.</DemoNotice>
         <section className="card p-5">
           <span className="grid h-12 w-12 place-items-center rounded-full bg-success-mint text-[#002107]">
             <Icon name="tab-sell" className="h-7 w-7" />

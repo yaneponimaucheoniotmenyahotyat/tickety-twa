@@ -11,7 +11,7 @@ export default function EscrowGuarantee() {
         <p className="text-headline">Гарантия безопасности «Сделка Tickety»</p>
         <p className="mt-1 text-footnote text-label-secondary">
           Деньги лежат на номинальном эскроу-счёте. Продавец получит выплату только после вашего
-          успешного прохода на событие по проверенному штрихкоду.
+          успешного прохода на событие.
         </p>
       </div>
     </aside>

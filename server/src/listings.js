@@ -1,12 +1,15 @@
 // Объявления: загрузка и проверка билета, создание, списки, снятие с продажи.
-import { ZONES, events, offers as demoOffers } from '../../shared/catalog.js';
+// Что сервер проверяет на самом деле: формат файла (по сигнатуре), дубли файла (SHA-256),
+// подтверждённый номер продавца, цену ≤ номинала зоны. Штрихкод с организатором не сверяется.
+import { events } from '../../shared/catalog.js';
 import {
   MAX_FILE_MB,
   MAX_QUANTITY,
   NEW_SELLER_ACTIVE_LIMIT,
+  findZone,
   listingTitle,
   priceError,
-  recognizeTicket,
+  seatsError,
 } from '../../shared/listingRules.js';
 import { detectKind, kindLabel, sha256, storeFile } from './ticketFiles.js';
 
@@ -60,13 +63,14 @@ function toOffer(row, viewerId) {
     eventId: row.event_id,
     zone: row.zone,
     title: row.title,
-    details: `${kindLabel(row.file_kind)} • проверен Tickety AI`,
+    details: `${kindLabel(row.file_kind)} • файл проверен`,
     delivery: row.file_kind === 'pdf' ? 'PDF' : 'Фото → PDF',
     eTicket: true,
     nominal: row.nominal,
     price: row.price,
     quantity: row.quantity,
-    verified: true,
+    // «Проверен» = продавец с подтверждённым номером; подлинность билета не утверждаем
+    verified: Boolean(row.phone_verified_at),
     seller: {
       name: sellerName(row),
       rating: null,
@@ -122,34 +126,28 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
     const kind = detectKind(buf);
     if (!kind) throw new HttpError(415, 'unsupported_file', 'Нужен PDF или фото билета (JPG, PNG, HEIC)');
 
+    // Дубли: тот же файл уже в активном объявлении — второй раз выставить нельзя.
+    // Это поиск по содержимому файла, а не по штрихкоду: другой скриншот того же билета пройдёт.
     const hash = sha256(buf);
-    const seed = parseInt(hash.slice(0, 8), 16);
-    const details = recognizeTicket(
-      seed,
-      demoOffers.filter((o) => o.eventId === event.id),
-      kindLabel(kind),
-    );
-
-    // «Ищем дубли»: этот билет уже продаётся — второй раз выставить нельзя
-    const [dup] = await db.query(`SELECT seller_id FROM listings WHERE barcode = $1 AND status = 'active'`, [details.barcode]);
+    const [dup] = await db.query(`SELECT seller_id FROM listings WHERE file_sha256 = $1 AND status = 'active'`, [hash]);
     if (dup) {
       const mine = Number(dup.seller_id) === Number(req.user.id);
       throw new HttpError(409, 'duplicate', mine ? 'Вы уже продаёте этот билет' : 'Этот билет уже продаётся на Tickety');
     }
 
     const [check] = await db.query(
-      `INSERT INTO ticket_checks (user_id, event_id, file_sha256, file_kind, file_size, zone, seated, sector, row_label, seat_label, nominal, barcode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
-      [req.user.id, event.id, hash, kind, buf.length, details.zone, details.seated, details.sector, details.row, details.seat, details.nominal, details.barcode],
+      `INSERT INTO ticket_checks (user_id, event_id, file_sha256, file_kind, file_size)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [req.user.id, event.id, hash, kind, buf.length],
     );
     await storeFile(config.uploadDir, hash, kind, buf);
 
     reply.code(201);
-    return { checkId: check.id, details };
+    return { checkId: check.id, fileKind: kindLabel(kind) };
   });
 
-  // Шаг «Выставить на продажу»: номинал и зона берутся из проверки, от клиента — только цена,
-  // количество и правка мест
+  // Шаг «Выставить на продажу»: зону и места указывает продавец, номинал — из прайса зоны
+  // (поля nominal в API нет), цена ≤ номинала проверяется здесь и ограничением в базе
   app.post(
     '/api/listings',
     {
@@ -157,15 +155,16 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
       schema: {
         body: {
           type: 'object',
-          required: ['checkId', 'price', 'quantity'],
+          required: ['checkId', 'zone', 'price', 'quantity'],
           additionalProperties: false,
           properties: {
             checkId: { type: 'string', pattern: UUID },
+            zone: { type: 'string', maxLength: 32 },
             price: { type: 'integer' },
             quantity: { type: 'integer', minimum: 1, maximum: MAX_QUANTITY },
-            sector: { type: 'string', maxLength: 8 },
-            row: { type: 'string', maxLength: 8 },
-            seat: { type: 'string', maxLength: 8 },
+            sector: { type: 'string', maxLength: 16 },
+            row: { type: 'string', maxLength: 16 },
+            seat: { type: 'string', maxLength: 16 },
           },
         },
       },
@@ -177,23 +176,20 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
       if (!check) throw new HttpError(404, 'check_not_found', 'Проверка билета не найдена — загрузите файл заново');
       upcomingEvent(check.event_id);
 
-      const error = priceError(price, check.nominal);
+      const zone = findZone(check.event_id, req.body.zone);
+      if (!zone) throw new HttpError(400, 'bad_zone', 'Такой зоны на этом событии нет');
+      const seats = zone.seated ? { sector: req.body.sector ?? '', row: req.body.row ?? '', seat: req.body.seat ?? '' } : {};
+      const seatsProblem = seatsError(zone, seats);
+      if (seatsProblem) throw new HttpError(400, 'bad_seats', seatsProblem);
+      const error = priceError(price, zone.nominal);
       if (error) throw new HttpError(400, 'bad_price', error);
-
-      const details = {
-        seated: check.seated,
-        zoneLabel: ZONES[check.zone],
-        sector: check.seated ? (req.body.sector ?? check.sector) : '',
-        row: check.seated ? (req.body.row ?? check.row_label) : '',
-        seat: check.seated ? (req.body.seat ?? check.seat_label) : '',
-      };
 
       let row;
       try {
         [row] = await db.query(
-          `INSERT INTO listings (seller_id, event_id, check_id, barcode, zone, title, file_kind, nominal, price, quantity)
+          `INSERT INTO listings (seller_id, event_id, check_id, file_sha256, zone, title, file_kind, nominal, price, quantity)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-          [req.user.id, check.event_id, check.id, check.barcode, check.zone, listingTitle(details), check.file_kind, check.nominal, price, quantity],
+          [req.user.id, check.event_id, check.id, check.file_sha256, zone.id, listingTitle(zone, seats), check.file_kind, zone.nominal, price, quantity],
         );
       } catch (err) {
         if (isUniqueViolation(err)) {

@@ -12,7 +12,15 @@ import Button from '@/components/ui/Button';
 import { addListing, publishListing } from '@/data/listingsStore';
 import { getEvent, getOffersByEvent } from '@/data/mockData';
 import { apiEnabled, uploadTicket } from '@/lib/api';
-import { analyzeTicketLocally, listingTitle, runCheckAnimation, validateFile } from '@/lib/ticketCheck';
+import {
+  CHECK_STEPS,
+  eventZones,
+  fileKindOf,
+  listingTitle,
+  runCheckAnimation,
+  seatsError,
+  validateFile,
+} from '@/lib/ticketCheck';
 import { getUser, haptic, setClosingConfirmation } from '@/lib/telegram';
 
 const IDLE_CHECK = { status: 'idle', step: 0, error: null };
@@ -27,21 +35,27 @@ export default function SellWizardPage() {
   const [eventId, setEventId] = useState(null);
   const [file, setFile] = useState(null);
   const [check, setCheck] = useState(IDLE_CHECK);
-  const [details, setDetails] = useState(null);
+  // Зону и места указывает продавец; номинал — из прайса зоны
+  const [zoneId, setZoneId] = useState(null);
+  const [seats, setSeats] = useState({ sector: '', row: '', seat: '' });
   const [quantity, setQuantity] = useState(1);
   const [price, setPrice] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [createdId, setCreatedId] = useState(null);
-  // Режим сервера: id проверки билета — объявление создаётся по нему, номинал знает сервер
+  // Режим сервера: id проверки файла — объявление создаётся по нему
   const [checkId, setCheckId] = useState(null);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState(null);
 
   const event = eventId ? getEvent(eventId) : null;
+  const zones = useMemo(() => (eventId ? eventZones(eventId) : []), [eventId]);
+  const zone = zones.find((z) => z.id === zoneId) ?? null;
+  const seatsProblem = zone ? seatsError(zone, seats) : null;
   const n = Number(price) || 0;
-  const priceValid = details && n >= MIN_PRICE && n <= details.nominal;
+  const priceValid = Boolean(zone) && n >= MIN_PRICE && n <= zone.nominal;
   // Дальше какого шага можно пройти с текущими данными (защита от прямого перехода по ?step=4)
-  const maxStep = !event ? 1 : check.status !== 'done' ? 2 : !priceValid ? 3 : 4;
+  const ticketReady = check.status === 'done' && Boolean(zone) && !seatsProblem;
+  const maxStep = !event ? 1 : !ticketReady ? 2 : !priceValid ? 3 : 4;
 
   useEffect(() => {
     if (step > maxStep && !createdId) setParams({ step: String(maxStep) }, { replace: true });
@@ -54,10 +68,10 @@ export default function SellWizardPage() {
   }, [eventId, createdId]);
 
   const market = useMemo(() => {
-    if (!event || !details) return { count: 0, min: 0 };
-    const same = getOffersByEvent(event.id).filter((o) => o.zone === details.zone && !o.own);
+    if (!event || !zoneId) return { count: 0, min: 0 };
+    const same = getOffersByEvent(event.id).filter((o) => o.zone === zoneId && !o.own);
     return { count: same.length, min: same.length ? Math.min(...same.map((o) => o.price)) : 0 };
-  }, [event, details]);
+  }, [event, zoneId]);
 
   const go = (next) => {
     haptic('light');
@@ -69,18 +83,23 @@ export default function SellWizardPage() {
       setEventId(id);
       setFile(null);
       setCheck(IDLE_CHECK);
-      setDetails(null);
+      setZoneId(null);
+      setSeats({ sector: '', row: '', seat: '' });
       setPrice('');
     }
     go(2);
   };
 
+  const selectZone = (id) => {
+    setZoneId(id);
+    // Цена по умолчанию — номинал зоны; продавец может снизить на шаге «Цена»
+    setPrice(String(zones.find((z) => z.id === id).nominal));
+  };
+
   const handleFile = async (f) => {
     const error = validateFile(f);
     setFile(f);
-    setDetails(null);
     setCheckId(null);
-    setPrice('');
     if (error) {
       haptic('error');
       setCheck({ status: 'error', step: 0, error });
@@ -88,27 +107,25 @@ export default function SellWizardPage() {
     }
     setCheck({ status: 'running', step: 0, error: null });
 
-    // С сервером: файл уходит на проверку (формат по содержимому, дубли, номинал).
-    // Без сервера: локальная «распознавалка». Анимация чек-листа идёт параллельно.
+    // С сервером: формат по содержимому файла и поиск дублей. Без сервера — только формат.
+    // Анимация чек-листа идёт параллельно с запросом.
     const work = apiEnabled
       ? uploadTicket(f, eventId).then((r) => {
           setCheckId(r.checkId);
-          return r.details;
+          return r.fileKind;
         })
-      : Promise.resolve(analyzeTicketLocally(f, getOffersByEvent(eventId).filter((o) => !o.own && !o.status)));
+      : Promise.resolve(fileKindOf(f));
 
-    let result;
+    let fileKind;
     try {
-      result = await runCheckAnimation(work, (i) => setCheck((c) => ({ ...c, step: i })));
+      fileKind = await runCheckAnimation(work, (i) => setCheck((c) => ({ ...c, step: i })));
     } catch (e) {
       haptic('error');
       setCheck({ status: 'error', step: 0, error: e.message });
       return;
     }
     haptic('success');
-    setDetails(result);
-    setPrice(String(result.nominal));
-    setCheck({ status: 'done', step: 4, error: null });
+    setCheck({ status: 'done', step: CHECK_STEPS.length, error: null, fileKind });
   };
 
   const publish = async () => {
@@ -118,9 +135,10 @@ export default function SellWizardPage() {
       try {
         const listing = await publishListing({
           checkId,
+          zone: zone.id,
           price: n,
           quantity,
-          ...(details.seated ? { sector: details.sector, row: details.row, seat: details.seat } : {}),
+          ...(zone.seated ? { row: seats.row, seat: seats.seat, ...(zone.needsSector ? { sector: seats.sector } : {}) } : {}),
         });
         haptic('success');
         setCreatedId(listing.id);
@@ -137,16 +155,16 @@ export default function SellWizardPage() {
     const listing = {
       id: `l-${Date.now().toString(36)}`,
       eventId,
-      zone: details.zone,
-      title: listingTitle(details),
-      details: `${details.fileKind} • проверен Tickety AI`,
-      delivery: details.fileKind === 'PDF' ? 'PDF' : 'Фото → PDF',
+      zone: zone.id,
+      title: listingTitle(zone, seats),
+      details: `${check.fileKind} • демо, хранится на этом устройстве`,
+      delivery: check.fileKind === 'PDF' ? 'PDF' : 'Фото → PDF',
       eTicket: true,
-      nominal: details.nominal,
+      nominal: zone.nominal,
       price: n,
       quantity,
-      verified: true,
-      seller: { name: user?.first_name ? `${user.first_name} (вы)` : 'Вы', rating: 5.0, sales: 0 },
+      verified: false,
+      seller: { name: user?.first_name ? `${user.first_name} (вы)` : 'Вы', rating: null, sales: 0 },
       own: true,
       status: 'active',
       createdAt: Date.now(),
@@ -160,8 +178,8 @@ export default function SellWizardPage() {
   const footer = {
     1: null, // событие выбирается тапом по строке
     2: (
-      <Button size="lg" block iconRight="arrow-right" disabled={check.status !== 'done'} onClick={() => go(3)}>
-        {check.status === 'running' ? 'Проверяем билет…' : 'Далее: цена'}
+      <Button size="lg" block iconRight="arrow-right" disabled={!ticketReady} onClick={() => go(3)}>
+        {check.status === 'running' ? 'Проверяем файл…' : check.status === 'done' && !zone ? 'Выберите зону' : 'Далее: цена'}
       </Button>
     ),
     3: (
@@ -191,21 +209,26 @@ export default function SellWizardPage() {
           <TicketUploadStep
             file={file}
             check={check}
-            details={details}
+            zones={zones}
+            zone={zone}
+            seats={seats}
+            seatsProblem={seatsProblem}
             quantity={quantity}
             onFile={handleFile}
-            onDetails={(patch) => setDetails((d) => ({ ...d, ...patch }))}
+            onZone={selectZone}
+            onSeats={(patch) => setSeats((prev) => ({ ...prev, ...patch }))}
             onQuantity={setQuantity}
           />
         )}
-        {step === 3 && details && (
-          <PriceStep nominal={details.nominal} price={price} onPrice={setPrice} quantity={quantity} market={market} />
+        {step === 3 && zone && (
+          <PriceStep nominal={zone.nominal} price={price} onPrice={setPrice} quantity={quantity} market={market} />
         )}
         {step === 4 && priceValid && (
           <ReviewStep
             event={event}
-            title={listingTitle(details)}
-            details={details}
+            title={listingTitle(zone, seats)}
+            fileKind={check.fileKind}
+            nominal={zone.nominal}
             quantity={quantity}
             price={n}
             confirmed={confirmed}
@@ -242,7 +265,7 @@ export default function SellWizardPage() {
           </span>
           <h2 className="mt-4 text-title2">Билет в продаже</h2>
           <p className="mt-1 text-subhead text-label-secondary">
-            Покупатели увидят его на странице «{event?.title}». Мы напишем в Telegram, как только билет купят.
+            Покупатели увидят его на странице «{event?.title}».
           </p>
         </div>
       </BottomSheet>

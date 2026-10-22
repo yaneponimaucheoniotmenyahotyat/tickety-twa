@@ -2,6 +2,11 @@
 // здесь — то, что нужно только интерфейсу, и селекторы.
 import { ZONES, events, offers } from '../../shared/catalog.js';
 import { getListingOffers } from './listingsStore';
+import { apiEnabled } from '@/lib/api';
+
+// Демо-режим — сервер не подключён (GitHub Pages): выдуманные события, лоты и продавцы
+// видны только здесь и всегда с плашкой «Демо». В бете (с сервером) — только настоящие объявления.
+export const DEMO_MODE = !apiEnabled;
 
 export { ZONES, events, offers };
 
@@ -30,8 +35,8 @@ export const RESERVATION_SECONDS = 15 * 60;
 
 // ---- Селекторы ----
 
-// Лоты витрины = демо-лоты + объявления пользователей (с сервера или с этого устройства)
-const allOffers = () => [...offers, ...getListingOffers()];
+// Лоты витрины: в демо — выдуманные лоты + объявления с устройства; в бете — только объявления с сервера
+const allOffers = () => (DEMO_MODE ? [...offers, ...getListingOffers()] : getListingOffers());
 
 export const getEvent = (id) => events.find((e) => e.id === id);
 export const getOffer = (id) => allOffers().find((o) => o.id === id);

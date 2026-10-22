@@ -4,13 +4,15 @@ import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import FavoriteButton from '@/components/ui/FavoriteButton';
 import EventCover from './EventCover';
+import { DEMO_MODE } from '@/data/mockData';
 import { formatEventDate, formatPrice, plural } from '@/lib/format';
 import { haptic } from '@/lib/telegram';
 
-// Бейджи на обложке — максимум два, в порядке важности для покупателя
+// Бейджи на обложке — максимум два, в порядке важности для покупателя.
+// «Осталось N», «Гарантия подлинности» и т.п. — выдуманные поля демо-каталога: только в демо.
 function coverBadges(event, allVerified) {
   const list = [];
-  if (event.ticketsLeft) {
+  if (DEMO_MODE && event.ticketsLeft) {
     const unit = event.category === 'standup' ? ['место', 'места', 'мест'] : ['билет', 'билета', 'билетов'];
     list.push(
       <Badge key="left" tone="danger">
@@ -18,10 +20,10 @@ function coverBadges(event, allVerified) {
       </Badge>,
     );
   }
-  if (event.authenticity) list.push(<Badge key="auth" tone="glassSuccess" icon="shield-check">Гарантия подлинности</Badge>);
-  if (event.seatingLabel) list.push(<Badge key="seat" tone="glass" icon="seat">{event.seatingLabel}</Badge>);
-  if (event.eTicket) list.push(<Badge key="e" tone="glass" icon="contactless">Электронный вход</Badge>);
-  if (allVerified) list.push(<Badge key="ai" tone="glassSuccess" icon="verified">Проверен ИИ</Badge>);
+  if (DEMO_MODE && event.authenticity) list.push(<Badge key="auth" tone="glassSuccess" icon="shield-check">Гарантия подлинности</Badge>);
+  if (DEMO_MODE && event.seatingLabel) list.push(<Badge key="seat" tone="glass" icon="seat">{event.seatingLabel}</Badge>);
+  if (DEMO_MODE && event.eTicket) list.push(<Badge key="e" tone="glass" icon="contactless">Электронный вход</Badge>);
+  if (allVerified) list.push(<Badge key="ai" tone="glassSuccess" icon="verified">Продавцы подтверждены</Badge>);
   return list.slice(0, 2);
 }
 
@@ -60,12 +62,16 @@ export default function EventCard({ event, minPrice, allVerified }) {
         <p className="mt-1 truncate text-subhead text-label-secondary">{event.description}</p>
 
         <div className="mt-4 flex items-end justify-between gap-3">
-          <div>
-            <p className="text-caption1 text-label-tertiary">Стоимость</p>
-            <p className="text-title3 font-bold text-brand">от {formatPrice(minPrice)}</p>
-          </div>
+          {minPrice != null ? (
+            <div>
+              <p className="text-caption1 text-label-tertiary">Стоимость</p>
+              <p className="text-title3 font-bold text-brand">от {formatPrice(minPrice)}</p>
+            </div>
+          ) : (
+            <p className="text-subhead text-label-secondary">Пока нет предложений</p>
+          )}
           <Button variant="soft" size="sm" iconRight="chevron-right" tabIndex={-1}>
-            Выбрать места
+            {minPrice != null ? 'Выбрать места' : 'Подробнее'}
           </Button>
         </div>
       </div>

@@ -1,44 +1,60 @@
-// Правила объявлений и «распознавание» билета — общие для приложения и сервера.
+// Правила объявлений — общие для приложения и сервера.
 // Сервер — источник истины: приложение повторяет проверки только ради мгновенных подсказок.
-import { ZONES } from './catalog.js';
+//
+// Честно о проверке билета: настоящей сверки штрихкода с организатором пока нет.
+// Продавец сам выбирает зону и места; номинал берётся из прайса зоны (не от продавца),
+// сервер проверяет формат файла, дубли файла и подтверждённый номер продавца.
+import { ZONES, offers } from './catalog.js';
 
 export const MAX_FILE_MB = 10;
 export const MIN_PRICE = 100;
 export const MAX_QUANTITY = 4;
 // Новый продавец (нет завершённых продаж) держит не больше стольких активных объявлений
 export const NEW_SELLER_ACTIVE_LIMIT = 3;
+const SEAT_MAX_LEN = 8;
 
 // Зоны без мест — свободная рассадка
 const GENERAL_ADMISSION = new Set(['dance', 'fan']);
+// Зоны, где кроме ряда и места нужен сектор
+const WITH_SECTOR = new Set(['stands']);
 
-// Имитация ИИ: данные билета детерминированно выводятся из числа seed
-// (на сервере — из SHA-256 содержимого файла) и демо-лотов события.
-// Номинал берётся с лотов той же зоны — продавец его не задаёт.
-export function recognizeTicket(seed, eventOffers, fileKind) {
-  const h = seed >>> 0;
-  const zones = [...new Set(eventOffers.map((o) => o.zone))];
-  const zone = zones[h % zones.length];
-  const nominal = Math.max(...eventOffers.filter((o) => o.zone === zone).map((o) => o.nominal));
-  const seated = !GENERAL_ADMISSION.has(zone);
-
-  return {
-    zone,
-    zoneLabel: ZONES[zone],
-    seated,
-    sector: seated ? (zone === 'stands' ? `A${1 + (h % 12)}` : ZONES[zone]) : '',
-    row: seated ? String(1 + ((h >>> 4) % 25)) : '',
-    seat: seated ? String(1 + ((h >>> 9) % 40)) : '',
+// Прайс зон события: [{ id, label, nominal, seated, needsSector }].
+// Сейчас выводится из каталога (максимальный номинал зоны); в бете его заводят в админке
+// по официальному прайсу организатора.
+export function eventZones(eventId) {
+  const byZone = new Map();
+  for (const o of offers) {
+    if (o.eventId !== eventId) continue;
+    byZone.set(o.zone, Math.max(byZone.get(o.zone) ?? 0, o.nominal));
+  }
+  return [...byZone].map(([id, nominal]) => ({
+    id,
+    label: ZONES[id],
     nominal,
-    barcode: String(h).padStart(10, '0').slice(-10),
-    fileKind,
-  };
+    seated: !GENERAL_ADMISSION.has(id),
+    needsSector: WITH_SECTOR.has(id),
+  }));
+}
+
+export const findZone = (eventId, zoneId) => eventZones(eventId).find((z) => z.id === zoneId) ?? null;
+
+// Ошибка в местах или null. Для свободной рассадки места не нужны.
+export function seatsError(zone, { sector = '', row = '', seat = '' } = {}) {
+  if (!zone.seated) return null;
+  const fields = [['Ряд', row], ['Место', seat], ...(zone.needsSector ? [['Сектор', sector]] : [])];
+  for (const [name, value] of fields) {
+    const v = String(value).trim();
+    if (!v) return `Укажите: ${name.toLowerCase()}`;
+    if (v.length > SEAT_MAX_LEN) return `${name}: не длиннее ${SEAT_MAX_LEN} символов`;
+  }
+  return null;
 }
 
 // Заголовок лота так же, как у демо-лотов: «Сектор A4, Ряд 7, Место 18» или «Танцпол»
-export function listingTitle({ seated, zoneLabel, sector, row, seat }) {
-  if (!seated) return zoneLabel;
-  const prefix = sector && sector !== zoneLabel ? `Сектор ${sector}` : zoneLabel;
-  return [prefix, row && `Ряд ${row}`, seat && `Место ${seat}`].filter(Boolean).join(', ');
+export function listingTitle(zone, { sector = '', row = '', seat = '' } = {}) {
+  if (!zone.seated) return zone.label;
+  const prefix = zone.needsSector && sector.trim() ? `Сектор ${sector.trim()}` : zone.label;
+  return [prefix, row.trim() && `Ряд ${row.trim()}`, seat.trim() && `Место ${seat.trim()}`].filter(Boolean).join(', ');
 }
 
 // Ошибка цены или null — одна формулировка и в приложении, и в ответе сервера

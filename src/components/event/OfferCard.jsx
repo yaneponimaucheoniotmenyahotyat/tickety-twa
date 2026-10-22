@@ -49,8 +49,8 @@ export default function OfferCard({ offer }) {
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-headline">{offer.title}</h3>
         {offer.verified && (
-          <Badge tone="success" icon="qr" className="mt-0.5 shrink-0">
-            Проверен ИИ
+          <Badge tone="success" icon="verified" className="mt-0.5 shrink-0">
+            Продавец подтверждён
           </Badge>
         )}
       </div>

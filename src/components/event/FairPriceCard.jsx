@@ -1,5 +1,6 @@
 import Icon from '@/components/icons/Icon';
 import Badge from '@/components/ui/Badge';
+import { DEMO_MODE } from '@/data/mockData';
 
 export default function FairPriceCard() {
   return (
@@ -13,8 +14,8 @@ export default function FairPriceCard() {
           <Badge tone="success" size="sm">Max 0%</Badge>
         </div>
         <p className="mt-1 text-footnote text-label-secondary">
-          Tickety блокирует цены выше официального номинала. Деньги замораживаются до вашего
-          успешного прохода через турникет.
+          Tickety не даёт выставить билет дороже номинала.
+          {DEMO_MODE && ' Деньги замораживаются до вашего успешного прохода через турникет.'}
         </p>
       </div>
     </section>

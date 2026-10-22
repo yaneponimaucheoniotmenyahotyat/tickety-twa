@@ -8,7 +8,8 @@ import PaymentMethodItem from '@/components/checkout/PaymentMethodItem';
 import PaymentSuccessSheet from '@/components/checkout/PaymentSuccessSheet';
 import ReservationTimer from '@/components/checkout/ReservationTimer';
 import Button from '@/components/ui/Button';
-import { PAYMENT_METHODS, RESERVATION_SECONDS, SERVICE_FEE_PERCENT, getEvent, getOffer } from '@/data/mockData';
+import DemoNotice from '@/components/ui/DemoNotice';
+import { DEMO_MODE, PAYMENT_METHODS, RESERVATION_SECONDS, SERVICE_FEE_PERCENT, getEvent, getOffer } from '@/data/mockData';
 import { useCountdown } from '@/hooks/useCountdown';
 import { addTicket } from '@/hooks/useTickets';
 import { formatPrice } from '@/lib/format';
@@ -46,6 +47,30 @@ export default function CheckoutPage() {
   // Свой билет купить нельзя (прямой переход по ссылке /checkout/<id своего объявления>)
   if (offer.own) return <Navigate to={`/event/${event.id}`} replace />;
 
+  // Бета: оплата через Tickety ещё не подключена — не изображаем её на настоящих объявлениях
+  if (!DEMO_MODE) {
+    return (
+      <>
+        <TopBar title="Покупка" left={<BackLink />} />
+        <main className="px-gutter pt-6">
+          <section className="card flex flex-col items-center px-6 py-8 text-center">
+            <span className="grid h-14 w-14 place-items-center rounded-full bg-brand-soft text-brand">
+              <Icon name="lock" className="h-7 w-7" />
+            </span>
+            <h1 className="mt-4 text-title3">Оплата скоро появится</h1>
+            <p className="mt-2 text-subhead text-label-secondary">
+              Сейчас идёт закрытая бета: покупка через Tickety с удержанием денег до прохода на событие ещё
+              не подключена. Мы не будем принимать оплату, пока не сможем её защитить.
+            </p>
+            <Button className="mt-5" variant="plain" onClick={() => navigate(`/event/${event.id}`, { replace: true })}>
+              Вернуться к событию
+            </Button>
+          </section>
+        </main>
+      </>
+    );
+  }
+
   const subtotal = offer.price * offer.quantity;
   const fee = Math.round((subtotal * SERVICE_FEE_PERCENT) / 100);
   const total = subtotal + fee;
@@ -67,12 +92,10 @@ export default function CheckoutPage() {
       <TopBar title="Оплата" left={<BackLink />} />
 
       <main className="space-y-3 px-gutter pb-[calc(150px+var(--app-safe-bottom))] pt-3">
+        <DemoNotice>Это имитация оплаты — деньги не списываются.</DemoNotice>
         <div className="flex items-center justify-between">
           <ReservationTimer seconds={status === 'paid' ? RESERVATION_SECONDS : secondsLeft} />
-          <span className="flex items-center gap-1 text-caption1 font-medium text-success">
-            <Icon name="shield-check" className="h-4 w-4" />
-            Шифрование 256-bit
-          </span>
+
         </div>
 
         <OrderSummary

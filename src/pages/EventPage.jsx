@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useListingOffers } from '@/hooks/useListings';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import Icon from '@/components/icons/Icon';
 import TopBar, { BackLink } from '@/components/layout/TopBar';
 import EventHero from '@/components/event/EventHero';
 import FairPriceCard from '@/components/event/FairPriceCard';
 import OfferCard from '@/components/event/OfferCard';
 import FavoriteButton from '@/components/ui/FavoriteButton';
+import Button from '@/components/ui/Button';
+import DemoNotice from '@/components/ui/DemoNotice';
 import SafeDealNotice from '@/components/ui/SafeDealNotice';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { ZONES, getEvent, getOffersByEvent } from '@/data/mockData';
@@ -30,6 +32,7 @@ function InfoRow({ icon, title, subtitle, action }) {
 
 export default function EventPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const event = getEvent(id);
   const listingOffers = useListingOffers(); // перерисовка, когда пришли объявления с сервера
   const allOffers = useMemo(
@@ -51,6 +54,7 @@ export default function EventPage() {
       <TopBar title="Событие" left={<BackLink label="Поиск" />} right={<FavoriteButton eventId={event.id} variant="plain" />} />
 
       <main className="space-y-3 px-gutter pb-8 pt-3">
+        <DemoNotice />
         <EventHero event={event} />
 
         <section className="card divide-y divide-separator">
@@ -90,6 +94,17 @@ export default function EventPage() {
             {list.map((o) => (
               <OfferCard key={o.id} offer={o} />
             ))}
+            {allOffers.length === 0 && (
+              <div className="card flex flex-col items-center px-6 py-8 text-center">
+                <p className="text-headline">Пока никто не продаёт билеты</p>
+                <p className="mt-1 text-subhead text-label-secondary">
+                  Есть лишний билет на это событие? Выставьте его — цена не выше номинала.
+                </p>
+                <Button className="mt-4" variant="soft" icon="tab-sell" onClick={() => navigate('/sell/new')}>
+                  Продать свой билет
+                </Button>
+              </div>
+            )}
           </div>
         </section>
 

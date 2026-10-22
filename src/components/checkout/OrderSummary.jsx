@@ -9,7 +9,7 @@ export default function OrderSummary({ event, offer, subtotal, fee, feePercent, 
         <div className="min-w-0 flex-1">
           {offer.verified && (
             <Badge tone="mint" icon="verified">
-              Проверено Tickety AI
+              Продавец подтверждён
             </Badge>
           )}
           <h2 className="mt-2 text-headline">{event.title}</h2>

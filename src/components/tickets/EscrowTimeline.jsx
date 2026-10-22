@@ -7,7 +7,7 @@ const DONE_BY_STATUS = { transfer: 1, ready: 2, used: 4 };
 export default function EscrowTimeline({ ticket, status }) {
   const steps = [
     { title: `Оплачено ${formatPrice(ticket.total)}`, text: 'Деньги заморожены на эскроу-счёте Tickety' },
-    { title: 'Билет переоформлен на вас', text: `Продавец ${ticket.seller} передал билет, штрихкод проверен` },
+    { title: 'Билет переоформлен на вас', text: `Продавец ${ticket.seller} передал билет` },
     { title: 'Проход на событие', text: 'Контролёр сканирует QR-код на входе' },
     { title: 'Выплата продавцу', text: 'Только после вашего успешного прохода' },
   ];
