@@ -117,6 +117,9 @@ export default defineConfig(({ mode }) => ({
     proxy: API_PROXY,
   },
   preview: {
+    // CORS решает сервер API (server/, ALLOWED_ORIGINS). Свой CORS у preview пускает только localhost
+    // и отвечал на preflight бет с github.io без разрешения — браузер обрывал запросы с подписью Telegram
+    cors: false,
     host: '127.0.0.1',
     port: 5173,
     strictPort: true,
