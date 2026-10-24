@@ -15,8 +15,11 @@ export function loadConfig(env = process.env) {
   if (!env.BOT_TOKEN && production) {
     throw new Error('BOT_TOKEN не задан — без него нельзя проверить, что запрос пришёл из Telegram');
   }
-  if (env.PAYMENTS_MODE && !['test', 'off'].includes(env.PAYMENTS_MODE)) {
-    throw new Error('PAYMENTS_MODE — test или off: настоящих платежей сервер пока не умеет');
+  if (env.PAYMENTS_MODE && !['test', 'manual', 'off'].includes(env.PAYMENTS_MODE)) {
+    throw new Error('PAYMENTS_MODE — test, manual или off');
+  }
+  if (env.PAYMENTS_MODE === 'manual' && !(env.PAYMENT_DETAILS ?? '').trim()) {
+    throw new Error('PAYMENTS_MODE=manual: укажите PAYMENT_DETAILS — куда покупатели переводят деньги');
   }
   if (allowDevAuth && production) {
     throw new Error('ALLOW_DEV_AUTH=1 запрещён в production: любой смог бы войти под чужим id');
@@ -32,9 +35,12 @@ export function loadConfig(env = process.env) {
       : DEFAULT_ORIGINS,
     initDataMaxAge: Number(env.INIT_DATA_MAX_AGE) || 86_400,
     allowDevAuth,
-    // Оплата: test — тестовые деньги (бета), off — покупка выключена. Настоящих денег пока нет:
-    // для них нужен договор с платёжным сервисом («Безопасная сделка»).
+    // Оплата: test — тестовые деньги; manual — покупатель переводит владельцу по PAYMENT_DETAILS,
+    // владелец подтверждает и сам платит продавцам; off — покупка выключена.
+    // Настоящий эквайринг — после договора с платёжным сервисом («Безопасная сделка»).
     paymentsMode: env.PAYMENTS_MODE ?? (production ? 'off' : 'test'),
+    // Реквизиты для ручного режима — только в .env, в код и git не попадают
+    paymentDetails: (env.PAYMENT_DETAILS ?? '').trim(),
     // Подпись ссылок на файлы билетов, если нет BOT_TOKEN (тесты)
     linkSecret: randomBytes(32).toString('hex'),
     // Администраторы — Telegram id через запятую

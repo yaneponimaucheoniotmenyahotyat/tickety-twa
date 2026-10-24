@@ -105,6 +105,12 @@ export const adminSupportClose = (id) => api(`/api/admin/support/${id}/close`, {
 
 export const adminOrders = (status = 'disputed') => api(`/api/admin/orders?status=${status}`);
 export const adminRefundOrder = (id, reason) => api(`/api/admin/orders/${id}/refund`, { method: 'POST', body: { reason } });
+export const adminConfirmPayment = (id) => api(`/api/admin/orders/${id}/confirm-payment`, { method: 'POST' });
+export const adminRejectPayment = (id, reason) =>
+  api(`/api/admin/orders/${id}/reject-payment`, { method: 'POST', body: { reason } });
+export const adminPayouts = (status = 'requested') => api(`/api/admin/payouts?status=${status}`);
+export const adminPayoutPaid = (id) => api(`/api/admin/payouts/${id}/paid`, { method: 'POST' });
+export const adminPayoutReject = (id, reason) => api(`/api/admin/payouts/${id}/reject`, { method: 'POST', body: { reason } });
 export const adminReleaseOrder = (id, reason) => api(`/api/admin/orders/${id}/release`, { method: 'POST', body: { reason } });
 
 // ---- Покупки и кошелёк ----
@@ -118,7 +124,9 @@ export const confirmOrder = (id) => api(`/api/orders/${id}/confirm`, { method: '
 export const disputeOrder = (id, reason) => api(`/api/orders/${id}/dispute`, { method: 'POST', body: { reason } });
 export const ticketLink = (id) => api(`/api/orders/${id}/ticket-link`, { method: 'POST' });
 export const fetchWallet = () => api('/api/wallet');
-export const requestPayout = (amount) => api('/api/wallet/payouts', { method: 'POST', body: { amount } });
+export const requestPayout = (amount, bank) =>
+  api('/api/wallet/payouts', { method: 'POST', body: bank ? { amount, bank } : { amount } });
+export const reportPaid = (id) => api(`/api/orders/${id}/report-paid`, { method: 'POST' });
 
 // Полный адрес для ссылки, которую открывает Telegram (браузер без нашего заголовка авторизации)
 export const absoluteApiUrl = (path) => `${BASE || window.location.origin}${path}`;

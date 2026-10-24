@@ -1,5 +1,6 @@
 // Команда Tickety и права доступа.
-//   • владелец — Telegram id из ADMIN_IDS (server/.env): всё, включая управление командой;
+//   • владелец — Telegram id из ADMIN_IDS (server/.env): всё, включая управление командой
+//     и деньги (payments: подтверждение переводов и выплаты — только он);
 //   • moderator — события и модерация объявлений (и жалобы на объявления);
 //   • support — обращения пользователей.
 // Роли выдаёт и забирает только владелец; через API стать владельцем нельзя.
@@ -9,7 +10,7 @@ export const ROLES = {
   moderator: { label: 'Модератор', permissions: ['events', 'moderation'] },
   support: { label: 'Поддержка', permissions: ['support'] },
 };
-const OWNER_PERMISSIONS = ['events', 'moderation', 'support', 'team'];
+const OWNER_PERMISSIONS = ['events', 'moderation', 'support', 'team', 'payments'];
 
 // { owner, roles, permissions[] } для пользователя
 export async function accessOf(db, config, userId) {

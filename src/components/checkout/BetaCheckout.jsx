@@ -27,11 +27,19 @@ export default function BetaCheckout({ event, offer }) {
   const [state, setState] = useState({ status: 'idle' }); // idle | paying | paid | error
   const total = offer.price * offer.quantity;
 
+  const manual = payments === 'manual';
+
   const pay = async () => {
     haptic('medium');
     setState({ status: 'paying' });
     try {
       const { order } = await createOrder(offer.id);
+      // Ручной режим: бронь есть — дальше реквизиты и «Я перевёл» на странице заказа
+      if (manual) {
+        refreshListings();
+        navigate(`/orders/${order.id}`, { replace: true });
+        return;
+      }
       const { order: paid } = await payOrder(order.id);
       haptic('success');
       setState({ status: 'paid', order: paid });
@@ -44,7 +52,7 @@ export default function BetaCheckout({ event, offer }) {
 
   if (payments === 'loading') return <PageLoader />;
 
-  if (payments !== 'test') {
+  if (payments !== 'test' && payments !== 'manual') {
     return (
       <>
         <TopBar title="Покупка" left={<BackLink />} />
@@ -70,10 +78,17 @@ export default function BetaCheckout({ event, offer }) {
     <>
       <TopBar title="Оплата" left={<BackLink />} />
       <main className="space-y-3 px-gutter pb-[calc(150px+var(--app-safe-bottom))] pt-3">
-        <div className="rounded-2xl bg-[#FFF4E5] px-4 py-3 text-subhead text-[#8A4B00] dark:bg-[#3A2A12] dark:text-[#FFC266]">
-          <b>Бета: тестовая оплата.</b> Деньги не списываются. Всё остальное — бронь, удержание до события,
-          спор и выплата продавцу — работает по-настоящему.
-        </div>
+        {manual ? (
+          <div className="rounded-2xl bg-brand-soft/60 px-4 py-3 text-subhead">
+            <b>Оплата переводом по СБП.</b> После брони покажем реквизиты Tickety и код для комментария. Деньги
+            хранятся у Tickety до события — продавец получит их, только если с билетом всё в порядке.
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-[#FFF4E5] px-4 py-3 text-subhead text-[#8A4B00] dark:bg-[#3A2A12] dark:text-[#FFC266]">
+            <b>Бета: тестовая оплата.</b> Деньги не списываются. Всё остальное — бронь, удержание до события,
+            спор и выплата продавцу — работает по-настоящему.
+          </div>
+        )}
 
         <OrderSummary event={event} offer={offer} subtotal={total} fee={0} feePercent={0} total={total} />
 
@@ -103,7 +118,13 @@ export default function BetaCheckout({ event, offer }) {
           </Button>
         ) : (
           <Button size="lg" block icon="lock" loading={state.status === 'paying'} disabled={state.status === 'paid'} onClick={pay}>
-            {state.status === 'paying' ? 'Оплачиваем…' : `Оплатить ${formatPrice(total)} (тест)`}
+            {state.status === 'paying'
+              ? manual
+                ? 'Бронируем…'
+                : 'Оплачиваем…'
+              : manual
+                ? `Забронировать и оплатить ${formatPrice(total)}`
+                : `Оплатить ${formatPrice(total)} (тест)`}
           </Button>
         )}
       </footer>

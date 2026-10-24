@@ -18,8 +18,13 @@ import {
   adminDeleteEvent,
   adminEvents,
   adminListings,
+  adminConfirmPayment,
   adminOrders,
+  adminPayoutPaid,
+  adminPayoutReject,
+  adminPayouts,
   adminRefundOrder,
+  adminRejectPayment,
   adminReleaseOrder,
   adminPublishEvent,
   adminRemoveListing,
@@ -300,17 +305,64 @@ function SupportTab() {
 }
 
 // ---- Сделки и споры ----
+// awaiting и «Выплаты» — ручные переводы, только у владельца (право payments)
 const DEAL_STATUS = {
+  awaiting: { label: 'Оплата', tone: 'brand', money: true },
   disputed: { label: 'Спор', tone: 'danger' },
   paid: { label: 'Удерживается', tone: 'brand' },
   completed: { label: 'Продавцу', tone: 'success' },
   refunded: { label: 'Возврат', tone: 'neutral' },
 };
 
+const ACTION_TEXT = {
+  refund: { title: 'Вернуть деньги покупателю', button: 'Вернуть деньги', hint: 'Например: билет недействителен, продавец не ответил' },
+  release: { title: 'Отдать деньги продавцу', button: 'Отдать продавцу', hint: 'Например: проход подтверждён' },
+  rejectPayment: { title: 'Перевод не пришёл', button: 'Снять бронь', hint: 'Например: поступления с этим кодом нет' },
+  rejectPayout: { title: 'Отклонить выплату', button: 'Отклонить', hint: 'Например: неверный банк, напишите в поддержку' },
+};
+
+// Заявки продавцов на вывод: владелец переводит по СБП и отмечает
+function PayoutsList({ onAction, version }) {
+  const [state, reload] = useLoad(() => adminPayouts('requested'), [version]);
+  const paid = async (payout) => {
+    if (!(await confirmDialog(`Вы перевели ${formatPrice(payout.amount)}: ${payout.details}?`))) return;
+    try {
+      await adminPayoutPaid(payout.id);
+      haptic('success');
+      reload();
+    } catch (e) {
+      await confirmDialog(e.message);
+    }
+  };
+  if (state.status === 'loading') return <PageLoader />;
+  if (state.status === 'error') return <p className="text-center text-subhead text-danger">{state.error.message}</p>;
+  if (!state.data.payouts.length) return <p className="px-4 py-6 text-center text-subhead text-label-secondary">Заявок нет</p>;
+  return state.data.payouts.map((p) => (
+    <article key={p.id} className="card p-4">
+      <p className="text-title3">{formatPrice(p.amount)}</p>
+      <p className="select-all text-subhead">{p.details}</p>
+      <p className="text-footnote text-label-secondary">
+        Продавец {p.seller.name} (ID {p.seller.id}) • {new Date(p.createdAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => paid(p)} className="pressable h-9 rounded-xl bg-success-soft text-footnote font-semibold text-success">
+          Перевёл
+        </button>
+        <button type="button" onClick={() => onAction({ type: 'rejectPayout', payout: p })} className="pressable h-9 rounded-xl bg-fill text-footnote font-semibold">
+          Отклонить
+        </button>
+      </div>
+    </article>
+  ));
+}
+
 function DealsTab() {
-  const [status, setStatus] = useState('disputed');
-  const [state, reload] = useLoad(() => adminOrders(status), [status]);
-  const [action, setAction] = useState(null); // { type: refund | release, order }
+  const account = useServerAccount();
+  const canMoney = account.status === 'ok' && account.user.staff?.permissions.includes('payments');
+  const [status, setStatus] = useState(canMoney ? 'awaiting' : 'disputed');
+  const [version, setVersion] = useState(0);
+  const [state, reload] = useLoad(() => (status === 'payouts' ? Promise.resolve({ orders: [] }) : adminOrders(status)), [status, version]);
+  const [action, setAction] = useState(null); // { type, order | payout }
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -321,14 +373,33 @@ function DealsTab() {
     setReason('');
     setError(null);
   };
+  const openPayout = (a) => {
+    setAction(a);
+    setReason('');
+    setError(null);
+  };
+  const confirmPayment = async (order) => {
+    if (!(await confirmDialog(`Поступило ${formatPrice(order.amount)} с комментарием ${order.paymentCode}?`))) return;
+    try {
+      await adminConfirmPayment(order.id);
+      haptic('success');
+      reload();
+    } catch (e) {
+      await confirmDialog(e.message);
+    }
+  };
   const submit = async () => {
     setBusy(true);
     setError(null);
     try {
-      if (action.type === 'refund') await adminRefundOrder(action.order.id, reason.trim());
-      else await adminReleaseOrder(action.order.id, reason.trim());
+      const why = reason.trim();
+      if (action.type === 'refund') await adminRefundOrder(action.order.id, why);
+      else if (action.type === 'release') await adminReleaseOrder(action.order.id, why);
+      else if (action.type === 'rejectPayment') await adminRejectPayment(action.order.id, why);
+      else await adminPayoutReject(action.payout.id, why);
       haptic('success');
       setAction(null);
+      setVersion((v) => v + 1);
       reload();
     } catch (e) {
       haptic('error');
@@ -350,31 +421,37 @@ function DealsTab() {
 
   return (
     <div className="space-y-3">
-      <SegmentedControl
-        dense
-        value={status}
-        onChange={setStatus}
-        options={Object.entries(DEAL_STATUS).map(([value, s]) => ({ value, label: s.label }))}
-      />
-      {state.status === 'loading' && <PageLoader />}
+      <div className="chips-scroll -mx-gutter px-gutter">
+        {[
+          ...Object.entries(DEAL_STATUS).filter(([, s]) => !s.money || canMoney),
+          ...(canMoney ? [['payouts', { label: 'Выплаты' }]] : []),
+        ].map(([value, s]) => (
+          <Chip key={value} size="sm" variant="brand" active={status === value} onClick={() => setStatus(value)}>
+            {s.label}
+          </Chip>
+        ))}
+      </div>
+      {status === 'payouts' && <PayoutsList onAction={openPayout} version={version} />}
+      {status !== 'payouts' && state.status === 'loading' && <PageLoader />}
       {state.status === 'error' && <p className="text-center text-subhead text-danger">{state.error.message}</p>}
-      {state.status === 'ok' && orders.length === 0 && (
+      {status !== 'payouts' && state.status === 'ok' && orders.length === 0 && (
         <p className="px-4 py-6 text-center text-subhead text-label-secondary">Пусто</p>
       )}
-      {orders.map((o) => (
+      {status !== 'payouts' && orders.map((o) => (
         <article key={o.id} className="card p-4">
           <div className="flex items-start justify-between gap-2">
             <p className="min-w-0 truncate text-footnote text-label-secondary">{o.event.title}</p>
-            <Badge size="sm" tone={DEAL_STATUS[o.status].tone}>
-              {DEAL_STATUS[o.status].label}
+            <Badge size="sm" tone={DEAL_STATUS[status === 'awaiting' ? 'awaiting' : o.status].tone}>
+              {DEAL_STATUS[status === 'awaiting' ? 'awaiting' : o.status].label}
             </Badge>
           </div>
           <p className="text-headline">{o.title}</p>
           <p className="text-subhead">
             <b>{formatPrice(o.amount)}</b>
             <span className="text-label-secondary">
-              {' '}
-              • {o.provider === 'test' ? 'тест' : o.provider} • удержание до {formatEventDate(o.holdUntil)}
+              {status === 'awaiting'
+                ? ` • код ${o.paymentCode} • «перевёл» в ${new Date(o.buyerReportedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
+                : ` • ${o.provider === 'test' ? 'тест' : o.provider === 'manual' ? 'перевод' : o.provider} • удержание до ${formatEventDate(o.holdUntil)}`}
             </span>
           </p>
           <p className="mt-1 text-footnote text-label-secondary">
@@ -383,6 +460,19 @@ function DealsTab() {
           {o.disputeReason && <p className="mt-2 rounded-xl bg-danger-soft px-3 py-2 text-footnote text-danger">Спор: {o.disputeReason}</p>}
           {o.resolution && o.status !== 'paid' && o.status !== 'disputed' && (
             <p className="mt-2 text-footnote text-label-secondary">Итог: {o.resolution}</p>
+          )}
+          {o.provider === 'manual' && o.buyer.phone && (o.status === 'paid' || o.status === 'disputed') && (
+            <p className="mt-1 text-footnote text-label-secondary">Для возврата: СБП {o.buyer.phone}</p>
+          )}
+          {status === 'awaiting' && (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => confirmPayment(o)} className="pressable h-9 rounded-xl bg-success-soft text-footnote font-semibold text-success">
+                Деньги пришли
+              </button>
+              <button type="button" onClick={() => open('rejectPayment', o)} className="pressable h-9 rounded-xl bg-fill text-footnote font-semibold">
+                Не пришли
+              </button>
+            </div>
           )}
           {(o.status === 'paid' || o.status === 'disputed') && (
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -403,9 +493,10 @@ function DealsTab() {
         header={
           action && (
             <div>
-              <h2 className="text-title3">{action.type === 'refund' ? 'Вернуть деньги покупателю' : 'Отдать деньги продавцу'}</h2>
+              <h2 className="text-title3">{ACTION_TEXT[action.type].title}</h2>
               <p className="text-footnote text-label-secondary">
-                {formatPrice(action.order.amount)} • {action.order.title}
+                {formatPrice((action.order ?? action.payout).amount)}
+                {action.order ? ` • ${action.order.title}` : ` • ${action.payout.details}`}
                 {action.type === 'refund' ? ' • объявление снимется с продажи' : ''}
               </p>
             </div>
@@ -415,16 +506,16 @@ function DealsTab() {
           <div>
             {error && <p className="mb-2 text-center text-footnote text-danger">{error}</p>}
             <Button size="lg" block loading={busy} disabled={reason.trim().length < 3} onClick={submit}>
-              {action?.type === 'refund' ? 'Вернуть деньги' : 'Отдать продавцу'}
+              {action && ACTION_TEXT[action.type].button}
             </Button>
           </div>
         }
       >
-        <p className="mb-2 text-footnote text-label-secondary">Решение и причину увидят покупатель и продавец</p>
+        <p className="mb-2 text-footnote text-label-secondary">Причину увидит пользователь — в приложении и сообщением от бота</p>
         <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value.slice(0, 500))}
-          placeholder={action?.type === 'refund' ? 'Например: билет недействителен, продавец не ответил' : 'Например: проход подтверждён'}
+          placeholder={action ? ACTION_TEXT[action.type].hint : ''}
           rows={3}
           className="w-full rounded-xl bg-fill px-3 py-2 text-body outline-none"
         />

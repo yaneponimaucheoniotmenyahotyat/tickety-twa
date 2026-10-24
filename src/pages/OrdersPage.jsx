@@ -8,12 +8,23 @@ import BottomSheet from '@/components/ui/BottomSheet';
 import Button from '@/components/ui/Button';
 import Chip from '@/components/ui/Chip';
 import PageLoader from '@/components/ui/PageLoader';
-import { absoluteApiUrl, confirmOrder, disputeOrder, fetchOrder, fetchOrders, ticketLink } from '@/lib/api';
+import {
+  absoluteApiUrl,
+  cancelOrder,
+  confirmOrder,
+  disputeOrder,
+  fetchOrder,
+  fetchOrders,
+  reportPaid,
+  ticketLink,
+} from '@/lib/api';
 import { formatEventDate, formatPrice } from '@/lib/format';
 import { confirmDialog, haptic, openLink } from '@/lib/telegram';
 
-// Статусы заказа глазами покупателя
+// Статусы заказа глазами покупателя. Неоплаченный заказ после «Я перевёл» — «Проверяем оплату».
+const statusOf = (o) => (o.status === 'pending' && o.buyerReportedAt ? ORDER_STATUS.checking : ORDER_STATUS[o.status]);
 export const ORDER_STATUS = {
+  checking: { label: 'Проверяем оплату', tone: 'brand' },
   pending: { label: 'Ждёт оплаты', tone: 'neutral' },
   paid: { label: 'Оплачен', tone: 'success' },
   disputed: { label: 'Спор', tone: 'danger' },
@@ -72,8 +83,8 @@ export function OrdersList() {
           <span className="min-w-0 flex-1">
             <span className="flex items-start justify-between gap-2">
               <span className="truncate text-headline">{o.event.title}</span>
-              <Badge size="sm" tone={ORDER_STATUS[o.status].tone} className="shrink-0">
-                {ORDER_STATUS[o.status].label}
+              <Badge size="sm" tone={statusOf(o).tone} className="shrink-0">
+                {statusOf(o).label}
               </Badge>
             </span>
             <span className="block truncate text-footnote text-label-secondary">
@@ -88,6 +99,73 @@ export function OrdersList() {
         </button>
       ))}
     </div>
+  );
+}
+
+// Копирование в буфер: в WebView Telegram clipboard API бывает недоступен — тогда выделяем текст
+async function copy(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    haptic('success');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function CopyRow({ label, value, mono }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-center gap-3 py-2">
+      <span className="min-w-0 flex-1">
+        <span className="block text-caption1 text-label-tertiary">{label}</span>
+        <span className={`block select-all break-words text-body ${mono ? 'font-mono font-semibold tracking-wider' : ''}`}>{value}</span>
+      </span>
+      <button
+        type="button"
+        onClick={async () => setCopied(await copy(value))}
+        className="pressable shrink-0 rounded-lg bg-fill px-3 py-1.5 text-footnote font-semibold text-brand"
+      >
+        {copied ? 'Скопировано' : 'Копировать'}
+      </button>
+    </div>
+  );
+}
+
+// Ручная оплата: куда перевести, с каким кодом, и «Я перевёл»
+function ManualPayment({ order, busy, onReported, onCancel }) {
+  const until = new Date(order.expiresAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  if (order.buyerReportedAt) {
+    return (
+      <section className="card p-4">
+        <h2 className="text-headline">Проверяем ваш перевод</h2>
+        <p className="mt-1 text-subhead text-label-secondary">
+          Как только Tickety увидит поступление с кодом <b>{order.paymentCode}</b>, бот напишет вам, и здесь появится
+          файл билета. Бронь сохраняется, пока мы проверяем.
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section className="card p-4">
+      <h2 className="text-headline">Переведите {formatPrice(order.payment.amount)}</h2>
+      <p className="text-footnote text-label-secondary">Бронь до {until}. Деньги хранятся у Tickety до события.</p>
+      <div className="mt-2 divide-y divide-separator">
+        <CopyRow label="Сумма" value={String(order.payment.amount)} />
+        <CopyRow label="Куда (СБП)" value={order.payment.details} />
+        <CopyRow label="Комментарий к переводу — обязательно" value={order.payment.code} mono />
+      </div>
+      <p className="mt-2 text-footnote text-label-secondary">
+        Переводите ровно эту сумму и укажите код в комментарии — по нему мы найдём ваш платёж. Не переводите продавцу
+        напрямую: тогда Tickety не сможет вернуть деньги.
+      </p>
+      <Button size="lg" block className="mt-4" loading={busy === 'report'} onClick={onReported}>
+        Я перевёл
+      </Button>
+      <button type="button" onClick={onCancel} className="mt-3 w-full text-center text-footnote text-label-tertiary">
+        Отменить бронь
+      </button>
+    </section>
   );
 }
 
@@ -141,6 +219,14 @@ export function OrderPage() {
       return result;
     });
 
+  const reported = async () => {
+    const ok = await confirmDialog(`Вы перевели ${formatPrice(state.order.payment.amount)} с комментарием ${state.order.payment.code}?`);
+    if (ok) await run('report', () => reportPaid(id));
+  };
+  const cancel = async () => {
+    if (await confirmDialog('Отменить бронь? Билет вернётся в продажу.')) await run('cancel', () => cancelOrder(id));
+  };
+
   const order = state.order;
   const canUse = order && ['paid', 'disputed', 'completed'].includes(order.status);
 
@@ -165,13 +251,13 @@ export function OrderPage() {
           <section className="card p-4">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-headline">{order.title}</h2>
-              <Badge size="sm" tone={ORDER_STATUS[order.status].tone}>
-                {ORDER_STATUS[order.status].label}
+              <Badge size="sm" tone={statusOf(order).tone}>
+                {statusOf(order).label}
               </Badge>
             </div>
             <p className="mt-1 text-footnote text-label-secondary">
               {order.quantity > 1 ? `${order.quantity} билета • ` : ''}продавец {order.seller.name} • {formatPrice(order.amount)}
-              {order.provider === 'test' ? ' (тестовая оплата)' : ''}
+              {order.provider === 'test' ? ' (тестовая оплата)' : order.provider === 'manual' ? ' • перевод по СБП' : ''}
             </p>
             {canUse && (
               <Button block size="lg" icon="qr" className="mt-4" loading={busy === 'file'} onClick={openTicket}>
@@ -185,10 +271,16 @@ export function OrderPage() {
             )}
           </section>
 
-          <section className="card flex gap-3 p-4">
-            <Icon name="shield-heart" className="mt-0.5 h-6 w-6 shrink-0 text-success" />
-            <p className="text-subhead">{holdText(order)}</p>
-          </section>
+          {order.status === 'pending' && order.payment && (
+            <ManualPayment order={order} busy={busy} onReported={reported} onCancel={cancel} />
+          )}
+
+          {holdText(order) && (
+            <section className="card flex gap-3 p-4">
+              <Icon name="shield-heart" className="mt-0.5 h-6 w-6 shrink-0 text-success" />
+              <p className="text-subhead">{holdText(order)}</p>
+            </section>
+          )}
 
           {error && <p className="text-center text-footnote text-danger">{error}</p>}
 
