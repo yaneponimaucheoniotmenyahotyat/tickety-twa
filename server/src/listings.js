@@ -80,7 +80,7 @@ export function toOffer(row, viewerId) {
 }
 
 export const LISTING_SELECT = `
-  SELECT l.*, u.first_name, u.last_name, u.phone_verified_at,
+  SELECT l.*, COALESCE(u.real_first_name, u.first_name) AS first_name, COALESCE(u.real_last_name, u.last_name) AS last_name, u.phone_verified_at,
          (SELECT count(*) FROM listings s WHERE s.seller_id = l.seller_id AND s.status = 'sold') AS seller_sales
   FROM listings l JOIN users u ON u.id = l.seller_id`;
 

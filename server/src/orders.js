@@ -55,8 +55,8 @@ async function post(t, entries) {
 const ORDER_SELECT = `
   SELECT o.*, l.title AS listing_title, l.zone, l.file_kind, l.file_sha256,
          e.title AS event_title, e.starts_at, e.venue, e.city, e.address, e.doors_open, e.cover, e.image,
-         s.first_name AS seller_first_name, s.last_name AS seller_last_name, s.username AS seller_username,
-         b.first_name AS buyer_first_name, b.last_name AS buyer_last_name, b.username AS buyer_username,
+         COALESCE(s.real_first_name, s.first_name) AS seller_first_name, COALESCE(s.real_last_name, s.last_name) AS seller_last_name, s.username AS seller_username,
+         COALESCE(b.real_first_name, b.first_name) AS buyer_first_name, COALESCE(b.real_last_name, b.last_name) AS buyer_last_name, b.username AS buyer_username,
          b.phone AS buyer_phone, b.phone_verified_at AS buyer_phone_verified_at
   FROM orders o
   JOIN listings l ON l.id = o.listing_id
@@ -557,7 +557,7 @@ export function registerOrderRoutes(app, { db, config, requireUser, requirePermi
         ]);
       });
       if (manual) {
-        await alertPayments(`Заявка на выплату: ${rub(req.body.amount)} продавцу ${shortName(req.user.first_name, req.user.last_name)}, СБП ${req.user.phone} • ${req.body.bank.trim()}.\n\nОтметить: Tickety → Админка → Сделки → Выплаты`);
+        await alertPayments(`Заявка на выплату: ${rub(req.body.amount)} продавцу ${shortName(req.user.real_first_name ?? req.user.first_name, req.user.real_last_name ?? req.user.last_name)}, СБП ${req.user.phone} • ${req.body.bank.trim()}.\n\nОтметить: Tickety → Админка → Сделки → Выплаты`);
       }
       return { wallet: await wallet(req.user.id) };
     },
@@ -692,7 +692,7 @@ export function registerOrderRoutes(app, { db, config, requireUser, requirePermi
   );
 
   const PAYOUT_SELECT = `
-    SELECT p.*, u.first_name, u.last_name, u.username FROM payouts p JOIN users u ON u.id = p.user_id`;
+    SELECT p.*, COALESCE(u.real_first_name, u.first_name) AS first_name, COALESCE(u.real_last_name, u.last_name) AS last_name, u.username FROM payouts p JOIN users u ON u.id = p.user_id`;
   const toPayout = (p) => ({
     id: p.id,
     amount: p.amount,

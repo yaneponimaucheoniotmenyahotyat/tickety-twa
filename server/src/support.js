@@ -42,7 +42,7 @@ function toThread(t) {
 }
 
 const THREAD_SELECT = `
-  SELECT t.*, u.first_name, u.last_name, u.username,
+  SELECT t.*, COALESCE(u.real_first_name, u.first_name) AS first_name, COALESCE(u.real_last_name, u.last_name) AS last_name, u.username,
          m.body AS last_body, m.author AS last_author
   FROM support_threads t
   JOIN users u ON u.id = t.user_id
@@ -55,7 +55,10 @@ export function registerSupportRoutes(app, { db, config, requireUser, requirePer
   async function alertStaff(thread, body, isNew) {
     const ids = new Set(await staffWith(db, config, 'support'));
     if (thread.category === 'complaint') for (const id of await staffWith(db, config, 'moderation')) ids.add(id);
-    const [user] = await db.query(`SELECT first_name, last_name, username FROM users WHERE id = $1`, [thread.user_id]);
+    const [user] = await db.query(
+      `SELECT COALESCE(users.real_first_name, users.first_name) AS first_name, COALESCE(users.real_last_name, users.last_name) AS last_name, username FROM users WHERE id = $1`,
+      [thread.user_id],
+    );
     const who = `${sellerName(user)}${user.username ? ` (@${user.username})` : ''}`;
     const head = isNew ? `Новое обращение «${CATEGORIES[thread.category]}»` : `Новое сообщение в обращении «${CATEGORIES[thread.category]}»`;
     const message = `${head} от ${who}:\n\n${excerpt(body)}\n\nОтветить: Tickety → Профиль → Админка → Обращения`;

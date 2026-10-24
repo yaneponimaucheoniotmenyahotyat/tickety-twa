@@ -6,11 +6,36 @@ import { files, multipart, setup, tma, users, verifyPhone } from './helpers.js';
 let ctx;
 const req = (user, method, url, payload) => ctx.app.inject({ method, url, payload, headers: { authorization: tma(user) } });
 
+const register = (user, firstName, lastName) => req(user, 'POST', '/api/me/registration', { firstName, lastName });
+
 before(async () => {
   ctx = await setup({ offer: true });
   await verifyPhone(ctx.app, users.alice);
 });
 after(() => ctx.close());
+
+test('регистрация: без имени и фамилии продавать нельзя', async () => {
+  const me = (await req(users.alice, 'GET', '/api/me')).json().user;
+  assert.equal(me.registered, false);
+  assert.equal(me.registrationRequired, true);
+  const { payload, headers } = await multipart({ eventId: 'mumiy-troll-vk' }, files.pdf());
+  const upload = await ctx.app.inject({ method: 'POST', url: '/api/ticket-checks', payload, headers: { ...headers, authorization: tma(users.alice) } });
+  assert.equal(upload.json().error, 'registration_required');
+});
+
+test('регистрация: имя проверяется — только буквы, 2–40 символов', async () => {
+  for (const [first, last] of [['', 'Иванова'], ['А', 'Иванова'], ['Алиса1', 'Иванова'], ['Алиса', '@ivanova'], ['Алиса', '🙂']]) {
+    const res = await register(users.alice, first, last);
+    assert.equal(res.statusCode, 400, `${first} ${last}`);
+  }
+  const ok = await register(users.alice, '  Алиса  ', 'Иванова-Петрова');
+  assert.equal(ok.statusCode, 200);
+  const user = ok.json().user;
+  assert.deepEqual([user.realFirstName, user.realLastName, user.registered], ['Алиса', 'Иванова-Петрова', true]);
+  assert.equal((await register(users.bob, 'Борис', 'Смирнов')).statusCode, 200);
+  assert.equal((await register(users.alice, "Анна-Мария", "д'Артаньян")).statusCode, 200, 'дефис и апостроф — можно');
+  await register(users.alice, 'Алиса', 'Иванова-Петрова');
+});
 
 test('новый пользователь видит, что оферту нужно принять', async () => {
   const { user } = (await req(users.alice, 'GET', '/api/me')).json();
@@ -51,4 +76,29 @@ test('новая редакция требует нового согласия',
   // Согласие хранится по версии: принятая когда-то другая редакция не считается
   await ctx.db.query(`UPDATE legal_acceptances SET version = 'старая' WHERE user_id = $1`, [users.alice.id]);
   assert.equal((await req(users.alice, 'GET', '/api/me')).json().user.offer.accepted, false);
+});
+
+test('в объявлении — настоящее имя, а не имя из Telegram', async () => {
+  // Telegram-имя Алисы — «Алиса Иванова», зарегистрирована как «Алиса Иванова-Петрова»
+  await req(users.alice, 'POST', '/api/me/accept-offer', { version: OFFER.version });
+  const { payload, headers } = await multipart({ eventId: 'mumiy-troll-vk' }, files.pdf());
+  const check = await ctx.app.inject({ method: 'POST', url: '/api/ticket-checks', payload, headers: { ...headers, authorization: tma(users.alice) } });
+  const listing = (await req(users.alice, 'POST', '/api/listings', { checkId: check.json().checkId, zone: 'dance', price: 1000, quantity: 1 })).json().listing;
+  assert.equal(listing.seller.name, 'Алиса И.');
+  // Вход через Telegram с другим ником имя не меняет
+  const renamed = { ...users.alice, first_name: 'xX_NightCat_Xx', last_name: undefined };
+  assert.equal((await req(renamed, 'GET', '/api/me')).json().user.realFirstName, 'Алиса');
+  const shown = (await ctx.app.inject('/api/listings')).json().listings.find((l) => l.id === listing.id);
+  assert.equal(shown.seller.name, 'Алиса И.');
+});
+
+test('после первой сделки имя меняется только через поддержку', async () => {
+  await req(users.bob, 'POST', '/api/me/accept-offer', { version: OFFER.version });
+  const listing = (await ctx.app.inject('/api/listings')).json().listings.find((l) => l.seller.name === 'Алиса И.');
+  const order = await req(users.bob, 'POST', '/api/orders', { listingId: listing.id });
+  assert.equal(order.statusCode, 201, order.body);
+  const locked = await register(users.alice, 'Алиса', 'Другая');
+  assert.equal(locked.statusCode, 409);
+  assert.equal(locked.json().error, 'name_locked');
+  assert.equal((await register(users.alice, 'Алиса', 'Иванова-Петрова')).statusCode, 200, 'то же имя — не изменение');
 });

@@ -42,7 +42,10 @@ export function registerStaffRoutes(app, { db, config, requirePermission, logAct
 
   app.get('/api/admin/staff', { preHandler: team }, async () => {
     const ids = [...new Set([...config.adminIds, ...(await db.query(`SELECT user_id FROM staff`)).map((r) => Number(r.user_id))])];
-    const users = await db.query(`SELECT id, first_name, last_name, username FROM users WHERE id = ANY($1)`, [ids]);
+    const users = await db.query(
+      `SELECT id, COALESCE(users.real_first_name, users.first_name) AS first_name, COALESCE(users.real_last_name, users.last_name) AS last_name, username FROM users WHERE id = ANY($1)`,
+      [ids],
+    );
     const roles = await db.query(`SELECT user_id, role FROM staff`);
     return {
       roles: Object.fromEntries(Object.entries(ROLES).map(([id, r]) => [id, r.label])),

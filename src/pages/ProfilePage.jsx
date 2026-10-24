@@ -8,7 +8,9 @@ import BottomSheet from '@/components/ui/BottomSheet';
 import ListRow from '@/components/ui/ListRow';
 import Toggle from '@/components/ui/Toggle';
 import Button from '@/components/ui/Button';
-import { confirmPhone } from '@/data/accountStore';
+import { nameError } from '../../shared/nameRules.js';
+import { confirmPhone, saveName } from '@/data/accountStore';
+import { NameFields } from './OfferPage';
 import { clearListings } from '@/data/listingsStore';
 import { useEvents } from '@/hooks/useEvents';
 import { clearFavorites, useFavorites } from '@/hooks/useFavorites';
@@ -85,7 +87,37 @@ export default function ProfilePage() {
   const savings = useMemo(() => tickets.reduce((sum, t) => sum + ticketSavings(t), 0), [tickets]);
   const events = useEvents();
   const favoriteEvents = events.filter((e) => favorites.has(e.id));
-  const name = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') : 'Гость';
+  // После регистрации — настоящее имя; ник из Telegram — только пока не зарегистрировался (и в демо)
+  const me = account.status === 'ok' ? account.user : null;
+  const name = me?.registered
+    ? `${me.realFirstName} ${me.realLastName}`
+    : user
+      ? [user.first_name, user.last_name].filter(Boolean).join(' ')
+      : 'Гость';
+  const [nameSheet, setNameSheet] = useState(false);
+  const [nameForm, setNameForm] = useState({ first: '', last: '' });
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameErr, setNameErr] = useState(null);
+  const openNameSheet = () => {
+    setNameForm({ first: me.realFirstName ?? '', last: me.realLastName ?? '' });
+    setNameErr(null);
+    setNameSheet(true);
+  };
+  const nameProblem = nameError(nameForm.first, 'Имя') ?? nameError(nameForm.last, 'Фамилия');
+  const submitName = async () => {
+    setNameBusy(true);
+    setNameErr(null);
+    try {
+      await saveName(nameForm.first, nameForm.last);
+      haptic('success');
+      setNameSheet(false);
+    } catch (e) {
+      haptic('error');
+      setNameErr(e.message);
+    } finally {
+      setNameBusy(false);
+    }
+  };
 
   const toggleNotify = async (on) => {
     if (!on) {
@@ -125,7 +157,13 @@ export default function ProfilePage() {
           </span>
           <h1 className="mt-3 text-title2">{name}</h1>
           <p className="text-subhead text-label-secondary">
-            {user?.username ? `@${user.username}` : user ? `ID ${user.id}` : 'Откройте Tickety в Telegram, чтобы войти'}
+            {me?.registered
+              ? me.phoneVerified
+                ? `Номер подтверждён • ${me.phoneMasked}`
+                : 'Номер не подтверждён'
+              : user
+                ? 'Регистрация не завершена'
+                : 'Откройте Tickety в Telegram, чтобы войти'}
           </p>
           {user?.is_premium && (
             <Badge tone="brand" icon="verified" className="mt-2">
@@ -225,6 +263,15 @@ export default function ProfilePage() {
               }
             />
           )}
+          {me?.registered && (
+            <ListRow
+              icon="person"
+              iconClass="bg-brand-soft text-brand"
+              title="Имя и фамилия"
+              subtitle={`${me.realFirstName} ${me.realLastName} • другим видно «${me.realFirstName} ${me.realLastName[0]}.»`}
+              onClick={openNameSheet}
+            />
+          )}
           {account.status === 'ok' && (
             <ListRow
               icon="person"
@@ -301,6 +348,27 @@ export default function ProfilePage() {
           <ListRow title="Сбросить данные на этом устройстве" danger onClick={resetData} />
         </Section>
       </main>
+
+      <BottomSheet
+        open={nameSheet}
+        onClose={() => setNameSheet(false)}
+        header={<h2 className="text-title3">Имя и фамилия</h2>}
+        footer={
+          <div>
+            {(nameErr || ((nameForm.first || nameForm.last) && nameProblem)) && (
+              <p className="mb-2 text-center text-footnote text-danger">{nameErr ?? nameProblem}</p>
+            )}
+            <Button size="lg" block loading={nameBusy} disabled={Boolean(nameProblem)} onClick={submitName}>
+              Сохранить
+            </Button>
+          </div>
+        }
+      >
+        <NameFields first={nameForm.first} last={nameForm.last} onChange={(patch) => setNameForm((f) => ({ ...f, ...patch }))} />
+        <p className="mt-2 px-1 text-footnote text-label-secondary">
+          Настоящие, как в паспорте. После первой сделки изменить можно только через поддержку.
+        </p>
+      </BottomSheet>
 
       <BottomSheet
         open={safeDealOpen}

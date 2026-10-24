@@ -1,6 +1,6 @@
 // Аккаунт на сервере — общий для «Профиля» и «Продать».
 // status: off (сервер не настроен) | loading | ok | error
-import { acceptOfferRemote, apiEnabled, getMe, verifyPhone } from '@/lib/api';
+import { acceptOfferRemote, apiEnabled, getMe, registerUser, verifyPhone } from '@/lib/api';
 import { haptic, requestContact } from '@/lib/telegram';
 
 const listeners = new Set();
@@ -28,6 +28,12 @@ export function loadAccount() {
       loading = null;
     });
   return loading;
+}
+
+// Регистрация или правка имени: сервер проверяет и возвращает обновлённого пользователя
+export async function saveName(firstName, lastName) {
+  const { user } = await registerUser(firstName, lastName);
+  set({ ...state, status: 'ok', user });
 }
 
 // Согласие с офертой: сервер записывает редакцию и время, экран согласия закрывается

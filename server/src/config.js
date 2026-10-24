@@ -41,6 +41,8 @@ export function loadConfig(env = process.env) {
     paymentsMode: env.PAYMENTS_MODE ?? (production ? 'off' : 'test'),
     // Без согласия с офертой нельзя продавать и покупать. OFFER_REQUIRED=0 — выключить (тесты)
     offerRequired: env.OFFER_REQUIRED !== '0',
+    // Без регистрации (имя и фамилия) — тоже. REGISTRATION_REQUIRED=0 — выключить (тесты)
+    registrationRequired: env.REGISTRATION_REQUIRED !== '0',
     // Реквизиты для ручного режима — только в .env, в код и git не попадают
     paymentDetails: (env.PAYMENT_DETAILS ?? '').trim(),
     // Подпись ссылок на файлы билетов, если нет BOT_TOKEN (тесты)

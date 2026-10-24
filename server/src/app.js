@@ -75,7 +75,8 @@ export async function buildApp({ config, db, logger = false, notify }) {
          allows_write_to_pm = users.allows_write_to_pm OR EXCLUDED.allows_write_to_pm,
          last_seen_at = now()
        RETURNING id, first_name, last_name, username, photo_url, is_premium, allows_write_to_pm,
-                 phone, phone_verified_at, blocked_at, created_at, last_seen_at, (xmax = 0) AS inserted`,
+                 phone, phone_verified_at, blocked_at, real_first_name, real_last_name, registered_at,
+                 created_at, last_seen_at, (xmax = 0) AS inserted`,
       [
         u.id,
         u.first_name ?? '',
@@ -113,6 +114,10 @@ export async function buildApp({ config, db, logger = false, notify }) {
     phoneVerified: Boolean(row.phone_verified_at),
     phoneMasked: maskPhone(row.phone),
     blocked: Boolean(row.blocked_at),
+    // Регистрация: имя и фамилия, которые пользователь ввёл сам (в профиле и объявлениях — они)
+    registered: Boolean(row.registered_at),
+    realFirstName: row.real_first_name,
+    realLastName: row.real_last_name,
     createdAt: row.created_at,
   });
 
@@ -123,6 +128,7 @@ export async function buildApp({ config, db, logger = false, notify }) {
     const acceptedAt = await offerAccepted(db, row.id);
     return {
       ...publicUser(row),
+      registrationRequired: config.registrationRequired,
       isAdmin: access.permissions.length > 0,
       staff: access,
       offer: { version: OFFER.version, accepted: Boolean(acceptedAt), acceptedAt, required: config.offerRequired },
@@ -162,7 +168,7 @@ export async function buildApp({ config, db, logger = false, notify }) {
       const [row] = await db.query(
         `UPDATE users SET phone = $2, phone_verified_at = now() WHERE id = $1
          RETURNING id, first_name, last_name, username, photo_url, is_premium, allows_write_to_pm,
-                   phone, phone_verified_at, blocked_at, created_at`,
+                   phone, phone_verified_at, blocked_at, real_first_name, real_last_name, registered_at, created_at`,
         [req.user.id, contact.phone],
       );
       await db.query(
@@ -189,7 +195,7 @@ export async function buildApp({ config, db, logger = false, notify }) {
   notify ??= createNotifier({ botToken: config.botToken, log: app.log });
 
   registerEventRoutes(app, { db });
-  registerLegalRoutes(app, { db, requireUser });
+  registerLegalRoutes(app, { db, requireUser, userWithAccess });
   registerListingRoutes(app, { db, config, requireUser, optionalUser });
   const { logAction } = registerAdminRoutes(app, { db, config, requirePermission });
   registerStaffRoutes(app, { db, config, requirePermission, logAction });

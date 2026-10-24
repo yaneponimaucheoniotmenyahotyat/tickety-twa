@@ -13,7 +13,7 @@ export const TOKEN = '123456:TEST-token-not-real';
 
 // Приложение на чистой базе в памяти с демо-событиями, файлы на диск не пишутся
 // uploadDir — сохранять файлы билетов (по умолчанию нет); payments — PAYMENTS_MODE
-// offer — требовать согласие с офертой (по умолчанию нет: остальные тесты проверяют своё)
+// offer — требовать регистрацию и согласие с офертой (по умолчанию нет: остальные тесты проверяют своё)
 export async function setup({ seed = true, uploadDir = 'off', payments = 'test', paymentDetails = '', offer = false } = {}) {
   const db = await openDb({ dataDir: 'memory://' });
   await migrate(db);
@@ -21,7 +21,7 @@ export async function setup({ seed = true, uploadDir = 'off', payments = 'test',
   // Сообщения бота не уходят в Telegram — копятся в sent для проверок
   const sent = [];
   const notify = async (chatId, text) => (sent.push({ chatId, text }), true);
-  const app = await buildApp({ config: loadConfig({ BOT_TOKEN: TOKEN, UPLOAD_DIR: uploadDir, ADMIN_IDS: String(ADMIN.id), PAYMENTS_MODE: payments, PAYMENT_DETAILS: paymentDetails, OFFER_REQUIRED: offer ? '1' : '0' }), db, notify });
+  const app = await buildApp({ config: loadConfig({ BOT_TOKEN: TOKEN, UPLOAD_DIR: uploadDir, ADMIN_IDS: String(ADMIN.id), PAYMENTS_MODE: payments, PAYMENT_DETAILS: paymentDetails, OFFER_REQUIRED: offer ? '1' : '0', REGISTRATION_REQUIRED: offer ? '1' : '0' }), db, notify });
   return { app, db, sent, close: async () => (await app.close(), await db.close()) };
 }
 
