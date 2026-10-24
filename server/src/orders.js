@@ -14,6 +14,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { HttpError } from './errors.js';
+import { assertOfferAccepted } from './legal.js';
 import { excerpt } from './notify.js';
 import { staffWith } from './staff.js';
 
@@ -251,6 +252,7 @@ export function registerOrderRoutes(app, { db, config, requireUser, requirePermi
     async (req, reply) => {
       paymentsOn();
       if (req.user.blocked_at) throw new HttpError(403, 'blocked', 'Покупки для вашего аккаунта закрыты');
+      await assertOfferAccepted(db, config, req.user);
       await expireReservations(db);
 
       // Та же бронь у того же покупателя — вернуть её (повторное нажатие «Купить»)
@@ -521,6 +523,7 @@ export function registerOrderRoutes(app, { db, config, requireUser, requirePermi
     async (req) => {
       paymentsOn();
       if (req.user.blocked_at) throw new HttpError(403, 'blocked', 'Вывод для вашего аккаунта закрыт — напишите в поддержку');
+      await assertOfferAccepted(db, config, req.user);
       if (manual) {
         // Выплата — только на подтверждённый номер самого продавца: чужие реквизиты подставить нельзя
         if (!req.user.phone_verified_at) throw new HttpError(403, 'phone_required', 'Подтвердите номер телефона — выплата придёт на него по СБП');

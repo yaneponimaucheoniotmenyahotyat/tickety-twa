@@ -1,6 +1,6 @@
 // Аккаунт на сервере — общий для «Профиля» и «Продать».
 // status: off (сервер не настроен) | loading | ok | error
-import { apiEnabled, getMe, verifyPhone } from '@/lib/api';
+import { acceptOfferRemote, apiEnabled, getMe, verifyPhone } from '@/lib/api';
 import { haptic, requestContact } from '@/lib/telegram';
 
 const listeners = new Set();
@@ -28,6 +28,12 @@ export function loadAccount() {
       loading = null;
     });
   return loading;
+}
+
+// Согласие с офертой: сервер записывает редакцию и время, экран согласия закрывается
+export async function acceptOffer(version) {
+  const { offer } = await acceptOfferRemote(version);
+  set({ ...state, user: { ...state.user, offer: { ...state.user.offer, accepted: true, acceptedAt: offer.acceptedAt } } });
 }
 
 // Нативный диалог «Поделиться номером» → подписанный ответ → сервер проверяет подпись.

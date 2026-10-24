@@ -78,6 +78,7 @@ export async function api(path, { method = 'GET', body, form } = {}, retried = f
 }
 
 export const getMe = () => api('/api/me');
+export const acceptOfferRemote = (version) => api('/api/me/accept-offer', { method: 'POST', body: { version } });
 export const verifyPhone = (response) => api('/api/me/phone', { method: 'POST', body: { response } });
 
 // ---- События ----

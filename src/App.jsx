@@ -18,6 +18,7 @@ import AdminThreadPage from './pages/admin/AdminThreadPage';
 import { SupportListPage, SupportNewPage, SupportThreadPage } from './pages/SupportPage';
 import { OrderPage } from './pages/OrdersPage';
 import WalletPage from './pages/WalletPage';
+import { OfferGate, OfferPage } from './pages/OfferPage';
 
 // Экраны со своей кнопкой действия внизу — таб-бар бы её перекрывал
 const NO_TAB_BAR = ['/checkout', '/sell/new', '/admin/events/', '/admin/support/', '/support/'];
@@ -54,12 +55,14 @@ export default function App() {
         <Route path="/admin/support/:id" element={<AdminThreadPage />} />
         <Route path="/orders/:id" element={<OrderPage />} />
         <Route path="/wallet" element={<WalletPage />} />
+        <Route path="/legal/offer" element={<OfferPage />} />
         <Route path="/support" element={<SupportListPage />} />
         <Route path="/support/new" element={<SupportNewPage />} />
         <Route path="/support/:id" element={<SupportThreadPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {withTabBar && <TabBar />}
+      <OfferGate />
     </div>
   );
 }

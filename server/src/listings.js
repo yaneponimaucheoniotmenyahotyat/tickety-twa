@@ -12,6 +12,7 @@ import {
   seatsError,
 } from '../../shared/listingRules.js';
 import { HttpError } from './errors.js';
+import { assertOfferAccepted } from './legal.js';
 import { upcomingEvent } from './events.js';
 import { codeHash, codeLabel, findCodes } from './ticketCodes.js';
 import { detectKind, kindLabel, sha256, storeFile } from './ticketFiles.js';
@@ -22,7 +23,8 @@ const isUniqueViolation = (err) => err?.code === '23505';
 // Допуск к продаже — защита от мошенников без юрлица:
 //   • номер телефона подтверждён подписью Telegram (сим-карты в РФ — по паспорту);
 //   • пока нет завершённых продаж — не больше NEW_SELLER_ACTIVE_LIMIT активных объявлений.
-async function assertCanSell(db, user) {
+async function assertCanSell(db, user, config) {
+  await assertOfferAccepted(db, config, user);
   if (user.blocked_at) {
     throw new HttpError(403, 'blocked', 'Продажа для вашего аккаунта закрыта. Если это ошибка — напишите в поддержку');
   }
@@ -112,7 +114,7 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
 
   // Шаг «Загрузите билет»: multipart с полями eventId и file
   app.post('/api/ticket-checks', { preHandler: requireUser }, async (req, reply) => {
-    await assertCanSell(db, req.user); // до загрузки файла — не принимаем его зря
+    await assertCanSell(db, req.user, config); // до загрузки файла — не принимаем его зря
     let part;
     try {
       part = await req.file({ limits: { fileSize: MAX_FILE_MB * 1024 * 1024, files: 1, fields: 5 } });
@@ -196,7 +198,7 @@ export function registerListingRoutes(app, { db, config, requireUser, optionalUs
     },
     async (req, reply) => {
       const { checkId, price, quantity } = req.body;
-      await assertCanSell(db, req.user);
+      await assertCanSell(db, req.user, config);
       const [check] = await db.query(`SELECT * FROM ticket_checks WHERE id = $1 AND user_id = $2`, [checkId, req.user.id]);
       if (!check) throw new HttpError(404, 'check_not_found', 'Проверка билета не найдена — загрузите файл заново');
       const event = await upcomingEvent(db, check.event_id);

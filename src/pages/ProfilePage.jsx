@@ -279,6 +279,17 @@ export default function ProfilePage() {
             onClick={() => setSafeDealOpen(true)}
           />
           <ListRow
+            icon="lock"
+            iconClass="bg-fill text-label-secondary"
+            title="Публичная оферта"
+            subtitle={
+              account.status === 'ok' && account.user.offer?.acceptedAt
+                ? `Принята ${new Date(account.user.offer.acceptedAt).toLocaleDateString('ru-RU')}`
+                : 'Условия использования Tickety'
+            }
+            onClick={() => navigate('/legal/offer')}
+          />
+          <ListRow
             icon="verified"
             iconClass="bg-fill text-label-secondary"
             title="О приложении"

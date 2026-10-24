@@ -39,6 +39,8 @@ export function loadConfig(env = process.env) {
     // владелец подтверждает и сам платит продавцам; off — покупка выключена.
     // Настоящий эквайринг — после договора с платёжным сервисом («Безопасная сделка»).
     paymentsMode: env.PAYMENTS_MODE ?? (production ? 'off' : 'test'),
+    // Без согласия с офертой нельзя продавать и покупать. OFFER_REQUIRED=0 — выключить (тесты)
+    offerRequired: env.OFFER_REQUIRED !== '0',
     // Реквизиты для ручного режима — только в .env, в код и git не попадают
     paymentDetails: (env.PAYMENT_DETAILS ?? '').trim(),
     // Подпись ссылок на файлы билетов, если нет BOT_TOKEN (тесты)

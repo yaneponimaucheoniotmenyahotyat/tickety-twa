@@ -2,8 +2,10 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { registerAdminRoutes } from './admin.js';
+import { OFFER } from '../../shared/legal/offer.js';
 import { HttpError } from './errors.js';
 import { registerEventRoutes } from './events.js';
+import { offerAccepted, registerLegalRoutes } from './legal.js';
 import { registerListingRoutes } from './listings.js';
 import { createNotifier } from './notify.js';
 import { registerOrderRoutes } from './orders.js';
@@ -117,7 +119,14 @@ export async function buildApp({ config, db, logger = false, notify }) {
   // Пользователь + его права в команде: владелец (ADMIN_IDS) или роли, выданные владельцем
   async function userWithAccess(row) {
     const access = await accessOf(db, config, row.id);
-    return { ...publicUser(row), isAdmin: access.permissions.length > 0, staff: access };
+    // Оферта: какая редакция действует и принял ли её пользователь
+    const acceptedAt = await offerAccepted(db, row.id);
+    return {
+      ...publicUser(row),
+      isAdmin: access.permissions.length > 0,
+      staff: access,
+      offer: { version: OFFER.version, accepted: Boolean(acceptedAt), acceptedAt, required: config.offerRequired },
+    };
   }
 
   app.get('/api/health', async () => {
@@ -180,6 +189,7 @@ export async function buildApp({ config, db, logger = false, notify }) {
   notify ??= createNotifier({ botToken: config.botToken, log: app.log });
 
   registerEventRoutes(app, { db });
+  registerLegalRoutes(app, { db, requireUser });
   registerListingRoutes(app, { db, config, requireUser, optionalUser });
   const { logAction } = registerAdminRoutes(app, { db, config, requirePermission });
   registerStaffRoutes(app, { db, config, requirePermission, logAction });
